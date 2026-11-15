@@ -68,6 +68,9 @@ recebe a versão desejada.
   HTTP-01** com renovação automática (30 dias antes) e publicação automática após renovar.
 - **Nós:** auto-registro, prioridade VRRP (automática ou manual), estado MASTER/BACKUP, versão aplicada, erros.
 - **Auditoria** de todas as ações; histórico de versões com diff e rollback.
+- **Login corporativo e governança:** LDAP/Active Directory e OIDC/SSO (Keycloak, Entra ID, Okta), papéis
+  VIEWER / OPERATOR / APPROVER / ADMIN a partir dos grupos, e **aprovação de publicação com quatro olhos**
+  (quem pede não aprova), publicação emergencial auditada. Detalhes em [docs/autenticacao.md](docs/autenticacao.md).
 
 Segurança da geração: todo valor que vira configuração é validado contra injeção (sem quebras de linha, aspas ou
 `#`); o bloco "avançado" não pode abrir novas seções; nomes `hapm_*` são reservados.
@@ -199,12 +202,15 @@ Métricas próprias: `hapm_vrrp_is_master`, `hapm_vrrp_state{state}`, `hapm_keep
 `HAPM_NODE_NAME`, `HAPM_NODE_INTERFACE`/`HAPM_NODE_ADDRESS`, `HAPM_RELOAD_MODE` (`systemd` | `master-socket` | `command`).
 CA interna para o manager: importe no truststore do JVM ou use `-Djavax.net.ssl.trustStore=`.
 
+**Login corporativo:** `HAPM_LDAP_*` (LDAP/AD), `HAPM_OIDC_*` + `SPRING_SECURITY_OAUTH2_CLIENT_*` (SSO),
+`HAPM_ROLES_ADMIN|APPROVER|OPERATOR|VIEWER` (grupos → papéis) — ver [docs/autenticacao.md](docs/autenticacao.md).
+
 **HA do próprio manager:** os nós continuam servindo tráfego se o manager cair (só não recebem mudanças). Para
 redundância do control plane: 2+ instâncias atrás de um balanceador, mesmo `HAPM_SECRET`, banco PostgreSQL.
 
 ## API (resumo)
 
-Autenticação: `POST /api/auth/login` → `Authorization: Bearer <token>`.
+Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authorization/hapm` → `Authorization: Bearer <token>`.
 
 | Método | Caminho | |
 |---|---|---|
@@ -214,14 +220,16 @@ Autenticação: `POST /api/auth/login` → `Authorization: Bearer <token>`.
 | POST | `/api/clusters/{id}/certificates/{oid}/issue` | emitir/renovar ACME |
 | GET | `/api/clusters/{id}/nodes` | nós, estado VRRP, versão desejada |
 | GET | `/api/clusters/{id}/preview` | config gerada, diff, `haproxy -c` |
-| POST | `/api/clusters/{id}/deployments` | publicar (`{"note": "..."}`) |
+| POST | `/api/clusters/{id}/deployments` | publicar (`{"note": "..."}`); com aprovação obrigatória cria um pedido (202). ADMIN: `{"emergency": true}` |
+| GET/POST | `/api/clusters/{id}/requests[/{rid}/approve\|reject\|cancel]` | pedidos de publicação |
+| GET/POST/PUT/DELETE | `/api/users[/{username}]` | usuários locais (ADMIN) |
 | POST | `/api/clusters/{id}/deployments/{did}/rollback` | nova versão com a config antiga |
 | GET | `/api/audit` | auditoria |
 | — | `/agent/v1/heartbeat`, `/agent/v1/bundle/{v}` | uso dos agentes (token de join) |
 | GET | `/metrics`, `/actuator/health` | Prometheus / health |
 
 ## Limitações conhecidas e próximos passos
-- Usuário único/admin; **OIDC/LDAP e papéis** (somente leitura, aprovador de publicação) são o próximo passo natural.
+- Papéis são globais (valem para todos os clusters); papéis **por cluster/equipe** são o próximo passo natural.
 - Chaves privadas dos certificados ficam no banco do manager (proteja o volume/banco; criptografia em repouso com KMS/Vault está no roadmap).
 - ACME apenas HTTP-01 (sem wildcard); DNS-01 (Route 53 etc.) no roadmap.
 - Logs de acesso do HAProxy → OTel (receiver syslog) → Loki ainda não incluídos.

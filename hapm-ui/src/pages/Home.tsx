@@ -3,6 +3,7 @@ import { api } from '../api';
 import { Fields, withDefaults } from '../form';
 import { clusterSchema } from '../schemas';
 import { Badge, useAction, useLoad, useToast } from '../ui';
+import { usePerm } from '../session';
 
 export function Home() {
   const { data: clusters } = useLoad<any[]>(() => api('GET', '/clusters'), [], 10000);
@@ -14,6 +15,7 @@ export function Home() {
     toast('cluster criado');
     location.hash = `#/c/${c.id}`;
   });
+  const { isAdmin } = usePerm();
   if (!clusters) return <p className="muted">carregando...</p>;
   return (
     <>
@@ -36,11 +38,11 @@ export function Home() {
           </table>
         ) : <p className="muted">Nenhum cluster ainda. Crie o primeiro abaixo.</p>}
       </div>
-      <details className="panel" open={!clusters.length}>
+      {isAdmin && <details className="panel" open={!clusters.length}>
         <summary><b>Novo cluster</b></summary>
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
         <button className="primary" onClick={create}>Criar cluster</button>
-      </details>
+      </details>}
     </>
   );
 }

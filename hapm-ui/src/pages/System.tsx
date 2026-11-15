@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { fmtDate, useAction, useLoad, useToast } from '../ui';
+import { usePerm } from '../session';
 
 export function Audit() {
   const { data: rows } = useLoad<any[]>(() => api('GET', '/audit'), []);
@@ -33,13 +34,25 @@ export function Account() {
     await api('POST', '/me/password', { current, password });
     toast('senha alterada');
   });
+  const { me } = usePerm();
+  if (me && me.source !== 'local')
+    return (
+      <>
+        <div className="top"><h2>Conta</h2></div>
+        <div className="panel" style={{ maxWidth: 520 }}>
+          <p><b>{me.displayName}</b> ({me.username}) — autenticado via <b>{me.source.toUpperCase()}</b>.</p>
+          <p>Papéis: {me.roles.join(', ')}</p>
+          <p className="muted">Senha e grupos são geridos no diretório corporativo. Mudanças de grupo valem no próximo login.</p>
+        </div>
+      </>
+    );
   return (
     <>
       <div className="top"><h2>Conta</h2></div>
       <div className="panel" style={{ maxWidth: 420 }}>
         <h3>Trocar senha</h3>
         <label className="f"><span>Senha atual</span><input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} /></label>
-        <label className="f"><span>Nova senha (mín. 8)</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <label className="f"><span>Nova senha (mín. 10)</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         <button className="primary" onClick={save}>Salvar</button>
       </div>
     </>

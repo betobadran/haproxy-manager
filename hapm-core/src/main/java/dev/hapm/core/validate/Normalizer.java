@@ -174,7 +174,10 @@ public final class Normalizer {
     String backend = null, redirectType = null, url = null, code = null, header = null, value = null, direction = null;
     Integer status = null;
     switch (action) {
-      case "use_backend" -> backend = c.name(path + ".backend", in.backend());
+      case "use_backend" -> {
+        if (in.backend() == null || in.backend().isBlank()) c.err(path + ".backend", "selecione o backend de destino da regra");
+        else backend = c.name(path + ".backend", in.backend());
+      }
       case "redirect" -> {
         redirectType = c.oneOf(path + ".redirectType", in.redirectType(), List.of("location", "prefix", "scheme"), "location");
         url = c.str(in.url());

@@ -64,7 +64,10 @@ export const clusterSchema: Row[] = [
   { key: 'settings', type: 'group', label: 'Configurações', fields: [
     [{ key: 'mode', label: 'Topologia', type: 'select', default: 'onprem-keepalived', options: [['onprem-keepalived', 'On-premise: HAProxy + Keepalived (VIP/VRRP)'], ['aws-nlb', 'AWS: NLB + HAProxy (Auto Scaling)'], ['aws-eip', 'AWS: HAProxy + Keepalived movendo EIP/IP privado']] },
       { key: 'rollout', label: 'Rollout', type: 'select', default: 'sequential', options: [['sequential', 'sequencial (um nó por vez, MASTER por último)'], ['parallel', 'paralelo (MASTER por último)']] }],
-    { key: 'autoDeployOnCertRenew', label: 'Publicar automaticamente quando um certificado for renovado', type: 'checkbox', default: true },
+    { key: 'autoDeployOnCertRenew', label: 'Publicar automaticamente quando um certificado for renovado (republica só os certificados)', type: 'checkbox', default: true },
+    { key: 'approval', label: 'Governança de publicação', type: 'group', fields: [[
+      { key: 'required', label: 'Exigir aprovação (APPROVER) antes de publicar', type: 'checkbox' },
+      { key: 'allowSelfApproval', label: 'Permitir que o próprio solicitante aprove (desliga os quatro olhos)', type: 'checkbox' }]] },
     { key: 'keepalived', label: 'Keepalived / VRRP', type: 'group', showIf: (v) => v.mode !== 'aws-nlb', fields: [
       [{ key: 'vips', label: 'VIPs (CIDR)', type: 'tokens', placeholder: '192.168.10.100/24' }, { key: 'interface', label: 'Interface', default: 'eth0' }, { key: 'routerId', label: 'virtual_router_id', type: 'number', default: 51 }],
       [{ key: 'authPass', label: 'Senha VRRP (≤8, vazio = gerar)' }, { key: 'advertInt', label: 'advert_int (s)', type: 'number', default: 1 }, { key: 'checkInterval', label: 'Intervalo do check (s)', type: 'number', default: 2 }],

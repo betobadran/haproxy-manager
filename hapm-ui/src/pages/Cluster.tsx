@@ -3,10 +3,11 @@ import { api } from '../api';
 import { Fields, withDefaults } from '../form';
 import { backendSchema, clusterSchema, frontendSchema } from '../schemas';
 import { ago, Badge, daysLeft, fmtDate, useAction, useLoad, useToast } from '../ui';
+import { usePerm } from '../session';
 
 const TABS: [string, string][] = [
   ['', 'Visão geral'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
-  ['publish', 'Publicar'], ['history', 'Histórico'], ['settings', 'Configurações'],
+  ['publish', 'Publicar'], ['approvals', 'Aprovações'], ['history', 'Histórico'], ['settings', 'Configurações'],
 ];
 
 export function ClusterPage({ cid, tab, sub }: { cid: string; tab: string; sub?: string }) {
@@ -17,16 +18,20 @@ export function ClusterPage({ cid, tab, sub }: { cid: string; tab: string; sub?:
       <div className="top">
         <h2>{cluster.name}</h2>
         <span className="badge b-muted">{cluster.settings.mode}</span>
+        {cluster.settings.approval?.required && <span className="badge b-warn">publicação com aprovação</span>}
       </div>
       <div className="tabs">
-        {TABS.map(([k, l]) => (
-          <a key={k} href={`#/c/${cid}${k ? `/${k}` : ''}`} className={tab === k ? 'active' : ''}>{l}</a>
+        {TABS.filter(([k]) => k !== 'approvals' || cluster.settings.approval?.required || cluster.pendingRequests > 0).map(([k, l]) => (
+          <a key={k} href={`#/c/${cid}${k ? `/${k}` : ''}`} className={tab === k ? 'active' : ''}>
+            {l}{k === 'approvals' && cluster.pendingRequests > 0 && <span className="count">{cluster.pendingRequests}</span>}
+          </a>
         ))}
       </div>
       {tab === '' && <Overview cluster={cluster} />}
       {(tab === 'frontends' || tab === 'backends') && <Objects key={tab + (sub ?? '')} cluster={cluster} kind={tab} sub={sub} />}
       {tab === 'certificates' && <Certificates cluster={cluster} />}
       {tab === 'publish' && <Publish cluster={cluster} />}
+      {tab === 'approvals' && <Approvals key={sub ?? ''} cluster={cluster} sub={sub} onChange={reload} />}
       {tab === 'history' && <History cluster={cluster} />}
       {tab === 'settings' && <Settings cluster={cluster} onSaved={reload} />}
     </>
@@ -40,6 +45,7 @@ function Overview({ cluster }: { cluster: any }) {
     [cluster.id], 5000);
   const run = useAction();
   const toast = useToast();
+  const { canEdit, isAdmin } = usePerm();
   if (!data) return <p className="muted">carregando...</p>;
   const [nodes, deps] = data;
   const online = nodes.filter((n) => n.online);
@@ -76,7 +82,7 @@ function Overview({ cluster }: { cluster: any }) {
         {keep && <div className="stat"><div className="k">VIPs</div><div className="v" style={{ fontSize: 15 }}>{vips.join(', ') || '—'}</div></div>}
         <div className="stat"><div className="k">Versão publicada</div><div className="v">{latest ? <>v{latest.version} <Badge s={latest.status} /></> : '—'}</div></div>
       </div>
-      {latest?.error && <div className="panel err">Última publicação: {latest.error}</div>}
+      {latest?.error && <div className={`panel ${latest.status === 'failed' ? 'err' : 'muted'}`}>Última publicação: {latest.error}</div>}
       <div className="panel">
         <h3>Nós</h3>
         {nodes.length ? (
@@ -94,26 +100,26 @@ function Overview({ cluster }: { cluster: any }) {
                   <td>{n.address || '—'}</td>
                   <td>{n.online ? <span className="badge b-ok">online</span> : <span className="badge b-err">offline ({ago(n.lastSeen)})</span>}</td>
                   {keep && <td><Badge s={n.vrrpState || 'UNKNOWN'} /></td>}
-                  {keep && <td>{n.priority ?? '—'} <button className="small" onClick={editPrio(n)}>editar</button></td>}
+                  {keep && <td>{n.priority ?? '—'} {canEdit && <button className="small" onClick={editPrio(n)}>editar</button>}</td>}
                   <td>v{n.appliedVersion}{n.desired?.hold && <div className="muted">{n.desired.reason}</div>}</td>
                   <td>
                     {n.lastApply ? <><Badge s={n.lastApply.ok ? 'succeeded' : 'failed'} /> v{n.lastApply.version}</> : '—'}
                     {n.lastApply?.error && <div className="err" style={{ fontSize: 12, maxWidth: 420 }}>{n.lastApply.error.slice(0, 400)}</div>}
                   </td>
                   <td className="muted">{n.haproxyVersion || '—'}</td>
-                  <td><button className="small danger" onClick={del(n)}>remover</button></td>
+                  <td>{isAdmin && <button className="small danger" onClick={del(n)}>remover</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : <p className="muted">Nenhum nó registrado. Instale o agente nos servidores HAProxy (instruções abaixo).</p>}
       </div>
-      <details className="panel" open={!nodes.length}>
+      {isAdmin && <details className="panel" open={!nodes.length}>
         <summary><b>Adicionar nós (instalar o agente)</b></summary>
         <p>Em cada servidor, configure <code>/etc/hapm/agent.env</code> (ou use o playbook Ansible / user-data do Terraform):</p>
         <pre>{`HAPM_MANAGER_URL=${location.origin}\nHAPM_JOIN_TOKEN=${cluster.joinToken}\nHAPM_NODE_NAME=$(hostname -s)\nHAPM_NODE_INTERFACE=${cluster.settings.keepalived?.interface ?? 'eth0'}`}</pre>
         <p className="muted">O agente se registra sozinho no primeiro heartbeat. Trate o token como segredo (pode ser rotacionado em Configurações).</p>
-      </details>
+      </details>}
     </>
   );
 }
@@ -128,6 +134,7 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
   const run = useAction();
   const toast = useToast();
   const schema = isFe ? frontendSchema : backendSchema;
+  const { canEdit } = usePerm();
   useEffect(() => {
     if (!data || !sub) return;
     setForm(sub === 'new' ? { mode: 'http' } : data[0].find((i) => i.id === sub) ?? null);
@@ -155,9 +162,9 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
         <h3>{sub === 'new' ? `Novo ${label}` : `${label}: ${form.name}`}</h3>
         <Fields rows={schema} value={form} onChange={setForm} ctx={{ backends }} />
         <div className="actions">
-          <button className="primary" onClick={save}>Salvar</button>
-          <a className="btn" href={`#/c/${cluster.id}/${kind}`}>Cancelar</a>
-          {sub !== 'new' && <button className="danger" onClick={del}>Excluir</button>}
+          {canEdit && <button className="primary" onClick={save}>Salvar</button>}
+          <a className="btn" href={`#/c/${cluster.id}/${kind}`}>{canEdit ? 'Cancelar' : 'Voltar'}</a>
+          {canEdit && sub !== 'new' && <button className="danger" onClick={del}>Excluir</button>}
         </div>
       </div>
     );
@@ -170,7 +177,7 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
     <div className="panel">
       <div className="top">
         <h3 style={{ margin: 0 }}>{isFe ? 'Listeners (frontends)' : 'Backends'}</h3>
-        <a className="btn" href={`#/c/${cluster.id}/${kind}/new`}>+ Novo {label}</a>
+        {canEdit && <a className="btn" href={`#/c/${cluster.id}/${kind}/new`}>+ Novo {label}</a>}
       </div>
       {items.length ? (
         <table>
@@ -208,6 +215,7 @@ function Certificates({ cluster }: { cluster: any }) {
     toast('emissão iniciada — acompanhe o status');
     reload();
   });
+  const { canEdit } = usePerm();
   const issue = (c: any) => run(async () => {
     await api('POST', `/clusters/${cluster.id}/certificates/${c.id}/issue`);
     toast('emissão iniciada');
@@ -240,10 +248,10 @@ function Certificates({ cluster }: { cluster: any }) {
                       {c.acme?.error && <div className="err" style={{ fontSize: 12 }}>{c.acme.error}</div>}
                     </td>
                     <td>
-                      <div className="actions">
+                      {canEdit && <div className="actions">
                         {c.source === 'acme' && <button className="small" onClick={issue(c)}>emitir/renovar</button>}
                         <button className="small danger" onClick={del(c)}>excluir</button>
-                      </div>
+                      </div>}
                     </td>
                   </tr>
                 );
@@ -253,7 +261,7 @@ function Certificates({ cluster }: { cluster: any }) {
         ) : <p className="muted">Nenhum certificado.</p>}
         <p className="muted">Todos os certificados vão para um crt-list: o HAProxy escolhe pelo SNI. O certificado padrão (cliente sem SNI) é definido em Configurações.</p>
       </div>
-      <details className="panel">
+      {canEdit && <><details className="panel">
         <summary><b>Emitir com Let's Encrypt (HTTP-01)</b></summary>
         <p className="muted">Requer "ACME → manager visto pelo HAProxy" em Configurações, um listener HTTP na porta 80 com ACME ativo e a configuração já publicada.</p>
         <Fields rows={[[{ key: 'name', label: 'Nome' }, { key: 'email', label: 'E-mail (opcional)' }],
@@ -266,7 +274,7 @@ function Certificates({ cluster }: { cluster: any }) {
         <Fields rows={[{ key: 'name', label: 'Nome' }, { key: 'pem', label: 'PEM (certificado + cadeia + chave privada)', type: 'textarea', mono: true, rows: 8 }]}
           value={upload} onChange={setUpload} ctx={{}} />
         <button className="primary" onClick={doUpload}>Salvar</button>
-      </details>
+      </details></>}
     </>
   );
 }
@@ -274,6 +282,7 @@ function Certificates({ cluster }: { cluster: any }) {
 // ------------------------------------------------------------------ publicar
 function Publish({ cluster }: { cluster: any }) {
   const { data: p } = useLoad<any>(() => api('GET', `/clusters/${cluster.id}/preview`), [cluster.id]);
+  const { canEdit, isAdmin } = usePerm();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const run = useAction();
@@ -286,12 +295,24 @@ function Publish({ cluster }: { cluster: any }) {
         <ul>{p.errors.map((e: string) => <li key={e} className="err">{e}</li>)}</ul>
       </div>
     );
-  const publish = run(async () => {
+  const needsApproval = !!cluster.settings.approval?.required;
+  const send = (emergency: boolean) => run(async () => {
+    let n = note;
+    if (emergency) {
+      const j = prompt('Publicação EMERGENCIAL (sem aprovação, auditada). Justificativa (incidente/chamado):', note);
+      if (!j) return;
+      n = j;
+    }
     setBusy(true);
     try {
-      const d = await api('POST', `/clusters/${cluster.id}/deployments`, { note });
-      toast(`v${d.version} publicada — acompanhando rollout`);
-      location.hash = `#/c/${cluster.id}`;
+      const d = await api('POST', `/clusters/${cluster.id}/deployments`, { note: n, emergency });
+      if (d.type === 'request') {
+        toast(`pedido #${d.id} criado — aguardando aprovação`);
+        location.hash = `#/c/${cluster.id}/approvals/${d.id}`;
+      } else {
+        toast(`v${d.version} publicada — acompanhando rollout`);
+        location.hash = `#/c/${cluster.id}`;
+      }
     } finally {
       setBusy(false);
     }
@@ -308,10 +329,14 @@ function Publish({ cluster }: { cluster: any }) {
         </p>
         {blocked && <pre className="err">{p.check.output}</pre>}
         {!p.changed && <p className="muted">Nada mudou em relação à v{p.currentVersion} (publicar mesmo assim reaplica certificados/keepalived).</p>}
-        <div className="row">
-          <input placeholder="o que mudou? (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="primary" style={{ flex: '0 0 auto' }} disabled={blocked || busy} onClick={publish}>Publicar</button>
-        </div>
+        {needsApproval && <p className="notice panel" style={{ padding: '8px 12px' }}>Este cluster exige aprovação: a publicação vira um <b>pedido</b> que outra pessoa com papel APPROVER precisa aprovar. O que for aprovado é exatamente o que você está vendo aqui.</p>}
+        {canEdit ? (
+          <div className="row">
+            <input placeholder={needsApproval ? 'o que muda e por quê (vai para o aprovador)' : 'o que mudou? (opcional)'} value={note} onChange={(e) => setNote(e.target.value)} />
+            <button className="primary" style={{ flex: '0 0 auto' }} disabled={blocked || busy} onClick={send(false)}>{needsApproval ? 'Solicitar aprovação' : 'Publicar'}</button>
+            {needsApproval && isAdmin && <button className="danger" style={{ flex: '0 0 auto' }} disabled={blocked || busy} onClick={send(true)}>Emergencial</button>}
+          </div>
+        ) : <p className="muted">Seu papel permite apenas visualizar.</p>}
         <p className="muted">
           {cluster.settings.mode === 'aws-nlb'
             ? 'Rollout: um nó por vez; cada nó valida, recarrega sem derrubar conexões e faz rollback sozinho se falhar.'
@@ -349,10 +374,16 @@ function History({ cluster }: { cluster: any }) {
   const toast = useToast();
   const rollback = (d: any) => run(async () => {
     if (!confirm(`Criar uma nova versão com a configuração da v${d.version}?`)) return;
-    const n = await api('POST', `/clusters/${cluster.id}/deployments/${d.id}/rollback`);
-    toast(`rollback publicado como v${n.version}`);
-    location.hash = `#/c/${cluster.id}`;
+    const n = await api('POST', `/clusters/${cluster.id}/deployments/${d.id}/rollback`, {});
+    if (n.type === 'request') {
+      toast(`pedido de rollback #${n.id} criado — aguardando aprovação`);
+      location.hash = `#/c/${cluster.id}/approvals/${n.id}`;
+    } else {
+      toast(`rollback publicado como v${n.version}`);
+      location.hash = `#/c/${cluster.id}`;
+    }
   });
+  const { canEdit } = usePerm();
   const show = (d: any) => run(async () => setShown(await api('GET', `/clusters/${cluster.id}/deployments/${d.id}`)));
   if (!deps) return <p className="muted">carregando...</p>;
   return (
@@ -361,19 +392,20 @@ function History({ cluster }: { cluster: any }) {
         <h3>Histórico de publicações</h3>
         {deps.length ? (
           <table>
-            <thead><tr><th>Versão</th><th>Status</th><th>Nota</th><th>Por</th><th>Quando</th><th /></tr></thead>
+            <thead><tr><th>Versão</th><th>Status</th><th>Nota</th><th>Por</th><th>Aprovado por</th><th>Quando</th><th /></tr></thead>
             <tbody>
               {deps.map((d) => (
                 <tr key={d.id}>
                   <td><b>v{d.version}</b></td>
-                  <td><Badge s={d.status} />{d.error && <div className="err" style={{ fontSize: 12 }}>{d.error.slice(0, 300)}</div>}</td>
+                  <td><Badge s={d.status} />{d.error && <div className={d.status === 'failed' ? 'err' : 'muted'} style={{ fontSize: 12 }}>{d.error.slice(0, 300)}</div>}</td>
                   <td>{d.note || ''}</td>
                   <td>{d.createdBy || ''}</td>
+                  <td>{d.approvedBy || '—'}</td>
                   <td>{fmtDate(d.createdAt)}</td>
                   <td>
                     <div className="actions">
                       <button className="small" onClick={show(d)}>ver config</button>
-                      <button className="small" onClick={rollback(d)}>rollback</button>
+                      {canEdit && <button className="small" onClick={rollback(d)}>rollback</button>}
                     </div>
                   </td>
                 </tr>
@@ -407,6 +439,7 @@ function Settings({ cluster, onSaved }: { cluster: any; onSaved: () => void }) {
     const r = await api('POST', `/clusters/${cluster.id}/rotate-token`);
     prompt('Novo token de join:', r.joinToken);
   });
+  const { isAdmin } = usePerm();
   const del = run(async () => {
     if (prompt(`Digite o nome do cluster (${cluster.name}) para excluir:`) !== cluster.name) return;
     await api('DELETE', `/clusters/${cluster.id}`);
@@ -416,14 +449,110 @@ function Settings({ cluster, onSaved }: { cluster: any; onSaved: () => void }) {
     <>
       <div className="panel">
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
-        <div className="actions"><button className="primary" onClick={save}>Salvar</button></div>
+        {isAdmin ? <div className="actions"><button className="primary" onClick={save}>Salvar</button></div> : <p className="muted">Somente ADMIN altera as configurações do cluster.</p>}
       </div>
-      <div className="panel">
+      {isAdmin && <div className="panel">
         <h3>Zona de perigo</h3>
         <div className="actions">
           <button onClick={rotate}>Rotacionar token de join</button>
           <button className="danger" onClick={del}>Excluir cluster</button>
         </div>
+      </div>}
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ aprovações
+const REQ: Record<string, [string, string]> = {
+  pending: ['aguardando aprovação', 'b-warn'], approved: ['aprovado', 'b-ok'], rejected: ['rejeitado', 'b-err'],
+  cancelled: ['cancelado', 'b-muted'], superseded: ['obsoleto', 'b-muted'],
+};
+const ReqBadge = ({ s }: { s: string }) => <span className={`badge ${REQ[s]?.[1] ?? 'b-muted'}`}>{REQ[s]?.[0] ?? s}</span>;
+
+function Approvals({ cluster, sub, onChange }: { cluster: any; sub?: string; onChange: () => void }) {
+  const { data: list, reload } = useLoad<any[]>(() => api('GET', `/clusters/${cluster.id}/requests`), [cluster.id], 5000);
+  const { data: req, reload: reloadReq } = useLoad<any>(() => (sub ? api('GET', `/clusters/${cluster.id}/requests/${sub}`) : Promise.resolve(null)), [cluster.id, sub]);
+  const [comment, setComment] = useState('');
+  const run = useAction();
+  const toast = useToast();
+  const { me, canApprove, isAdmin } = usePerm();
+  const after = () => {
+    reload();
+    reloadReq();
+    onChange();
+  };
+  const approve = run(async () => {
+    const r = await api('POST', `/clusters/${cluster.id}/requests/${sub}/approve`, { comment });
+    toast(`aprovado — publicando v${r.deployment.version}`);
+    location.hash = `#/c/${cluster.id}`;
+    onChange();
+  });
+  const reject = run(async () => {
+    await api('POST', `/clusters/${cluster.id}/requests/${sub}/reject`, { comment });
+    toast('pedido rejeitado');
+    after();
+  });
+  const cancel = run(async () => {
+    await api('POST', `/clusters/${cluster.id}/requests/${sub}/cancel`);
+    toast('pedido cancelado');
+    after();
+  });
+  if (!list) return <p className="muted">carregando...</p>;
+  const selfApproval = !!cluster.settings.approval?.allowSelfApproval;
+  return (
+    <>
+      {req && (
+        <div className="panel">
+          <div className="top">
+            <h3 style={{ margin: 0 }}>Pedido #{req.id}</h3>
+            <ReqBadge s={req.status} />
+            <a className="btn" href={`#/c/${cluster.id}/approvals`}>voltar</a>
+          </div>
+          <p>Solicitado por <b>{req.requestedBy}</b> em {fmtDate(req.requestedAt)} sobre a v{req.baseVersion}
+            {req.currentVersion !== req.baseVersion && req.status === 'pending' && <span className="b-err"> — atenção: a versão atual já é v{req.currentVersion}, este pedido está desatualizado</span>}</p>
+          {req.note && <p><b>Motivo:</b> {req.note}</p>}
+          {req.decidedBy && <p><b>{REQ[req.status]?.[0]}</b> por {req.decidedBy} em {fmtDate(req.decidedAt)}{req.decisionNote ? ` — "${req.decisionNote}"` : ''}</p>}
+          <h4>O que muda em relação à v{req.baseVersion}</h4>
+          {!req.diff.some((d: any) => d.op === '+' || d.op === '-') && <p className="notice panel" style={{ padding: '8px 12px' }}>Nenhuma alteração no haproxy.cfg (republica certificados/keepalived).</p>}
+          <div className="diff panel" style={{ padding: 8, maxHeight: 480, overflow: 'auto' }}>
+            {req.diff.map((d: any, i: number) => (
+              <div key={i} className={d.op === '+' ? 'add' : d.op === '-' ? 'del' : d.op === '@' ? 'gap' : ''}>{`${d.op === '@' ? '' : d.op} ${d.line}`}</div>
+            ))}
+          </div>
+          <details><summary>haproxy.cfg completo do pedido</summary><pre>{req.haproxyCfg}</pre></details>
+          {req.status === 'pending' && (
+            <>
+              <label className="f" style={{ marginTop: 12 }}><span>Comentário (obrigatório para rejeitar)</span>
+                <input value={comment} onChange={(e) => setComment(e.target.value)} /></label>
+              <div className="actions">
+                {canApprove && (req.requestedBy !== me?.username || selfApproval)
+                  ? <><button className="primary" onClick={approve}>Aprovar e publicar</button><button className="danger" onClick={reject}>Rejeitar</button></>
+                  : canApprove && <span className="muted">Quatro olhos: você não pode aprovar o próprio pedido.</span>}
+                {(req.requestedBy === me?.username || isAdmin) && <button onClick={cancel}>Cancelar pedido</button>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      <div className="panel">
+        <h3>Pedidos de publicação</h3>
+        {list.length ? (
+          <table>
+            <thead><tr><th>#</th><th>Status</th><th>Motivo</th><th>Solicitante</th><th>Quando</th><th>Decisão</th></tr></thead>
+            <tbody>
+              {list.map((r) => (
+                <tr key={r.id}>
+                  <td><a href={`#/c/${cluster.id}/approvals/${r.id}`}>#{r.id}</a></td>
+                  <td><ReqBadge s={r.status} /></td>
+                  <td>{r.note || ''}</td>
+                  <td>{r.requestedBy}</td>
+                  <td>{fmtDate(r.requestedAt)}</td>
+                  <td>{r.decidedBy ? `${r.decidedBy}${r.decisionNote ? `: ${r.decisionNote}` : ''}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <p className="muted">Nenhum pedido.</p>}
       </div>
     </>
   );
