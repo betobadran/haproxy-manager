@@ -32,6 +32,12 @@ public class Store {
     this.json = json;
   }
 
+  /** Long anulável portável (o driver do SQLite não suporta getObject(col, Long.class) com NULL). */
+  static Long nullableLong(ResultSet rs, String col) throws SQLException {
+    long v = rs.getLong(col);
+    return rs.wasNull() ? null : v;
+  }
+
   static String now() {
     return Instant.now().toString();
   }
@@ -281,7 +287,7 @@ public class Store {
   private DeploymentRow deployment(ResultSet rs, int i) throws SQLException {
     return new DeploymentRow(rs.getLong("id"), rs.getString("cluster_id"), rs.getInt("version"), rs.getString("status"), rs.getString("error"),
         rs.getString("note"), rs.getString("created_by"), rs.getString("created_at"), rs.getString("finished_at"), rs.getString("snapshot"),
-        rs.getString("haproxy_cfg"), rs.getString("approved_by"), (Long) rs.getObject("request_id", Long.class));
+        rs.getString("haproxy_cfg"), rs.getString("approved_by"), nullableLong(rs, "request_id"));
   }
 
   public List<DeploymentRow> listDeployments(String clusterId, int limit) {
@@ -335,7 +341,7 @@ public class Store {
   private RequestRow request(ResultSet rs, int i) throws SQLException {
     return new RequestRow(rs.getLong("id"), rs.getString("cluster_id"), rs.getInt("base_version"), rs.getString("status"), rs.getString("note"),
         rs.getString("requested_by"), rs.getString("requested_at"), rs.getString("decided_by"), rs.getString("decided_at"), rs.getString("decision_note"),
-        (Long) rs.getObject("deployment_id", Long.class), rs.getString("snapshot"), rs.getString("haproxy_cfg"));
+        nullableLong(rs, "deployment_id"), rs.getString("snapshot"), rs.getString("haproxy_cfg"));
   }
 
   /** Cria um pedido; pedidos pendentes anteriores do cluster ficam obsoletos (baseados em estado antigo). */

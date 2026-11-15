@@ -31,9 +31,13 @@ import tools.jackson.databind.json.JsonMapper;
  * Cobre publicação, bloqueio de config inválida, falha no nó com rollback automático, rollback manual e métricas.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:e2e;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
     "hapm.admin-password=admin-pass", "hapm.deployment-timeout-sec=60"})
 class EndToEndTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void db(org.springframework.test.context.DynamicPropertyRegistry r) {
+    TestDb.register(r, "e2e");
+  }
+
   @LocalServerPort int port;
 
   final HttpClient http = HttpClient.newHttpClient();

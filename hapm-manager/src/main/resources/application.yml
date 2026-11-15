@@ -7,12 +7,16 @@ server:
 spring:
   application:
     name: hapm-manager
-  # Padrão: H2 em arquivo (um único manager). Para HA do próprio manager use PostgreSQL:
-  #   SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/hapm  (+ USERNAME/PASSWORD)
+  # Banco: SQLite local (padrão, arquivo em HAPM_DATA_DIR) ou PostgreSQL (instalação completa / vários managers):
+  #   HAPM_DB_URL=jdbc:postgresql://db:5432/hapm  HAPM_DB_USER=hapm  HAPM_DB_PASSWORD=...
+  # SQLite: WAL (leitores não bloqueiam escritor), transações IMMEDIATE e busy_timeout evitam SQLITE_BUSY.
   datasource:
-    url: ${HAPM_DB_URL:jdbc:h2:file:${HAPM_DATA_DIR:./data}/hapm;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
-    username: ${HAPM_DB_USER:sa}
+    url: ${HAPM_DB_URL:jdbc:sqlite:${HAPM_DATA_DIR:./data}/hapm.db?foreign_keys=true&journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE}
+    username: ${HAPM_DB_USER:}
     password: ${HAPM_DB_PASSWORD:}
+  flyway:
+    # migrações por banco: db/migration/sqlite ou db/migration/postgresql
+    locations: classpath:db/migration/{vendor}
   servlet:
     multipart:
       max-file-size: 2MB

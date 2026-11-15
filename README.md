@@ -91,7 +91,7 @@ Segurança da geração: todo valor que vira configuração é validado contra i
 pom.xml                    POM pai (Maven multi-módulo)
 hapm-core/                 modelo, validação, render de haproxy.cfg/keepalived.conf (Java puro)
 hapm-ui/                   React + Vite + TypeScript (frontend-maven-plugin -> META-INF/resources)
-hapm-manager/              Spring Boot: API REST, UI, publicação, ACME, /metrics  (+ Dockerfile)
+hapm-manager/              Spring Boot: API REST, UI, publicação, ACME, /metrics, SQLite ou PostgreSQL  (+ Dockerfile)
 hapm-agent/                agente Java (jar único) + scripts do keepalived + unit systemd
 observability/             OTel Collector (edge e gateway), Prometheus (+ alertas), Grafana (dashboard)
 deploy/bash/               instaladores Bash (manager e nós) + deploy via SSH + bundle
@@ -157,7 +157,7 @@ deploy/bash/deploy.sh -i hosts.conf nodes lb02   # atualizar só um nó
 Sem SSH central: copie o bundle para o servidor e rode o instalador localmente:
 
 ```bash
-sudo ./install-manager.sh --admin-password-file /root/admin-pass [--db-url jdbc:postgresql://... --db-user hapm --db-password-file ...] [--env-file auth.env]
+sudo ./install-manager.sh --admin-password-file /root/admin-pass [--with-postgres | --db-url jdbc:postgresql://... --db-user hapm --db-password-file ...] [--env-file auth.env]
 sudo ./install-node.sh --manager-url http://hapm:8080 --join-token-file /root/token --interface eth0 \
      [--otel-gateway otel-gw:4317 --cluster-label dc1] [--vrrp-peers 10.10.0.12] [--no-keepalived]
 ```
@@ -238,7 +238,7 @@ Métricas próprias: `hapm_vrrp_is_master`, `hapm_vrrp_state{state}`, `hapm_keep
 
 **Manager** (variáveis de ambiente): `HAPM_PORT` (8080), `HAPM_DATA_DIR`, `HAPM_ADMIN_USER`/`HAPM_ADMIN_PASSWORD`
 (senha aleatória no log se vazio), `HAPM_SECRET` (assinatura das sessões; defina o mesmo em todos os managers),
-`HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL), `HAPM_ACME_DIRECTORY`
+`HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
 (`acme://letsencrypt.org`; staging: `acme://letsencrypt.org/staging`), `HAPM_HAPROXY_BIN`, `HAPM_NODE_OFFLINE_AFTER` (15 s).
 
 **Agente**: ver `hapm-agent/src/main/dist/systemd/agent.env.example` — `HAPM_MANAGER_URL`, `HAPM_JOIN_TOKEN`,
@@ -247,6 +247,9 @@ CA interna para o manager: importe no truststore do JVM ou use `-Djavax.net.ssl.
 
 **Login corporativo:** `HAPM_LDAP_*` (LDAP/AD), `HAPM_OIDC_*` + `SPRING_SECURITY_OAUTH2_CLIENT_*` (SSO),
 `HAPM_ROLES_ADMIN|APPROVER|OPERATOR|VIEWER` (grupos → papéis) — ver [docs/autenticacao.md](docs/autenticacao.md).
+
+**Banco:** **SQLite** na instalação local (padrão, zero configuração) e **PostgreSQL** na instalação completa
+(`install-manager.sh --with-postgres` instala e configura um PostgreSQL local; `--db-url` usa um externo).
 
 **HA do próprio manager:** os nós continuam servindo tráfego se o manager cair (só não recebem mudanças). Para
 redundância do control plane: 2+ instâncias atrás de um balanceador, mesmo `HAPM_SECRET`, banco PostgreSQL.

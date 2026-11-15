@@ -22,7 +22,6 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /** Fluxo OIDC authorization-code completo contra um IdP falso (mock-oauth2-server). */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:oidc;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
     "hapm.admin-password=admin-pass-123",
     "hapm.auth.oidc.enabled=true",
     "hapm.auth.oidc.groups-claim=realm_access.roles",
@@ -31,6 +30,11 @@ import org.springframework.test.context.DynamicPropertySource;
     "spring.security.oauth2.client.registration.hapm.client-secret=segredo",
     "spring.security.oauth2.client.registration.hapm.scope=openid,profile,email"})
 class OidcLoginTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void db(org.springframework.test.context.DynamicPropertyRegistry r) {
+    TestDb.register(r, "oidc");
+  }
+
   static final MockOAuth2Server IDP = new MockOAuth2Server();
 
   static {

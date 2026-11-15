@@ -11,9 +11,13 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 
 /** Papéis (VIEWER/OPERATOR/APPROVER/ADMIN) e fluxo de aprovação com quatro olhos. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:authz;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
     "hapm.admin-password=admin-pass-123"})
 class AuthorizationTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void db(org.springframework.test.context.DynamicPropertyRegistry r) {
+    TestDb.register(r, "authz");
+  }
+
   @LocalServerPort int port;
   ApiClient admin;
 

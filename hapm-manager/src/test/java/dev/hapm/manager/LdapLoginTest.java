@@ -17,7 +17,6 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /** Login via LDAP real (UnboundID em memória): bind, busca de grupos e mapeamento para papéis. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:ldap;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
     "hapm.admin-password=admin-pass-123",
     "hapm.auth.ldap.enabled=true",
     "hapm.auth.ldap.base-dn=dc=exemplo,dc=com",
@@ -30,6 +29,11 @@ import org.springframework.test.context.DynamicPropertySource;
     "hapm.auth.role-mapping.OPERATOR=sre,hapm-operators",
     "hapm.auth.role-mapping.APPROVER=change-managers"})
 class LdapLoginTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void db(org.springframework.test.context.DynamicPropertyRegistry r) {
+    TestDb.register(r, "ldap");
+  }
+
   static final InMemoryDirectoryServer LDAP;
 
   static {

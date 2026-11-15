@@ -14,8 +14,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:rollout;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1")
+@SpringBootTest
 class RolloutTest {
+  @org.springframework.test.context.DynamicPropertySource
+  static void db(org.springframework.test.context.DynamicPropertyRegistry r) {
+    TestDb.register(r, "rollout");
+  }
+
   @Autowired Store store;
   @Autowired DeployService deploy;
 

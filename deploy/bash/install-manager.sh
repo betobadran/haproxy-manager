@@ -3,8 +3,10 @@
 #
 # Uso (como root, a partir do bundle):
 #   HAPM_ADMIN_PASSWORD='...' ./install-manager.sh
-#   ./install-manager.sh --port 8080 --db-url jdbc:postgresql://db:5432/hapm --db-user hapm --db-password-file /root/db-pass \
-#                        --env-file ./auth.env      # LDAP/OIDC (ver docs/autenticacao.md)
+#   ./install-manager.sh --with-postgres                       # instalação completa: PostgreSQL local criado e configurado
+#   ./install-manager.sh --db-url jdbc:postgresql://db:5432/hapm --db-user hapm --db-password-file /root/db-pass   # PostgreSQL externo
+#   ./install-manager.sh --env-file ./auth.env                  # LDAP/OIDC (ver docs/autenticacao.md)
+# Sem opções de banco: SQLite em /var/lib/hapm-manager/hapm.db (instalação local, um único manager).
 
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
@@ -15,7 +17,8 @@ Opções:
   --port PORTA               porta HTTP (padrão: 8080)
   --admin-password-file ARQ  senha do admin inicial (ou HAPM_ADMIN_PASSWORD); sem ela, uma senha aleatória vai para o log
   --secret-file ARQ          segredo de sessão (ou HAPM_SECRET); obrigatório e igual em todos os managers de um cluster de managers
-  --db-url URL               JDBC do PostgreSQL (padrão: H2 local em /var/lib/hapm-manager)
+  --with-postgres            instala o PostgreSQL neste servidor, cria usuário/banco "hapm" (senha aleatória) e usa-o
+  --db-url URL               JDBC de um PostgreSQL externo (padrão: SQLite em /var/lib/hapm-manager/hapm.db)
   --db-user USUARIO
   --db-password-file ARQ     (ou HAPM_DB_PASSWORD)
   --env-file ARQ             variáveis extras (HAPM_LDAP_*, HAPM_OIDC_*, SPRING_SECURITY_OAUTH2_*...), mescladas no manager.env
@@ -26,12 +29,13 @@ Opções:
 USAGE
 }
 
-PORT=8080 ADMIN_FILE='' SECRET_FILE='' DB_URL='' DB_USER='' DB_PASS_FILE='' EXTRA_ENV='' WITH_HAPROXY=1 START=1
+PORT=8080 ADMIN_FILE='' SECRET_FILE='' DB_URL='' DB_USER='' DB_PASS_FILE='' EXTRA_ENV='' WITH_HAPROXY=1 START=1 WITH_PG=0
 while (($#)); do
   case $1 in
     --port) PORT=$2; shift 2 ;;
     --admin-password-file) ADMIN_FILE=$2; shift 2 ;;
     --secret-file) SECRET_FILE=$2; shift 2 ;;
+    --with-postgres) WITH_PG=1; shift ;;
     --db-url) DB_URL=$2; shift 2 ;;
     --db-user) DB_USER=$2; shift 2 ;;
     --db-password-file) DB_PASS_FILE=$2; shift 2 ;;
@@ -45,6 +49,7 @@ while (($#)); do
 done
 
 require_root
+((WITH_PG)) && [[ -n $DB_URL ]] && die "use --with-postgres OU --db-url, não os dois"
 if ! [[ $PORT =~ ^[0-9]+$ ]] || ((PORT < 1 || PORT > 65535)); then die "--port inválida"; fi
 B=$HAPM_BUNDLE_DIR
 [[ -f $B/hapm-manager.jar ]] || die "bundle sem hapm-manager.jar (gere com make-bundle.sh)"
@@ -63,6 +68,47 @@ install -d -m 0755 /opt/hapm-manager
 
 changed=0
 copy_if_changed "$B/hapm-manager.jar" /opt/hapm-manager/hapm-manager.jar 0644 && changed=1
+
+# ------------------------------------------------------------------ PostgreSQL local (instalação completa)
+setup_postgres() {
+  local fam pwfile=/etc/hapm-manager/db-password hba
+  fam=$(os_family)
+  log "PostgreSQL local"
+  ensure_packages "postgresql:postgresql-server"
+  if [[ $fam == rhel ]] && [[ ! -s /var/lib/pgsql/data/PG_VERSION ]]; then postgresql-setup --initdb; fi
+  if has_systemd; then systemctl enable -q --now postgresql; fi
+  local i
+  for i in $(seq 1 30); do runuser -u postgres -- psql -tAc 'select 1' >/dev/null 2>&1 && break; sleep 1; done
+  runuser -u postgres -- psql -tAc 'select 1' >/dev/null 2>&1 || die "PostgreSQL não respondeu"
+  if [[ ! -s $pwfile ]]; then
+    umask 077
+    head -c 24 /dev/urandom | base64 | tr -d '/+=\n' > "$pwfile"
+    umask 022
+    info "senha do banco gerada em $pwfile"
+  fi
+  chmod 600 "$pwfile"
+  local pw
+  pw=$(cat "$pwfile")
+  if [[ $(runuser -u postgres -- psql -tAc "select 1 from pg_roles where rolname='hapm'") != 1 ]]; then
+    runuser -u postgres -- psql -q -c "create role hapm login password '$pw'"
+    info "role hapm criada"
+  else
+    runuser -u postgres -- psql -q -c "alter role hapm password '$pw'"
+  fi
+  if [[ $(runuser -u postgres -- psql -tAc "select 1 from pg_database where datname='hapm'") != 1 ]]; then
+    runuser -u postgres -- createdb -O hapm hapm
+    info "banco hapm criado"
+  fi
+  # garante login por senha em 127.0.0.1 (o padrão do RHEL é ident)
+  hba=$(runuser -u postgres -- psql -tAc 'show hba_file')
+  if ! grep -qE '^host[[:space:]]+hapm[[:space:]]+hapm[[:space:]]+127\.0\.0\.1/32' "$hba"; then
+    sed -i '1i host    hapm    hapm    127.0.0.1/32    scram-sha-256' "$hba"
+    runuser -u postgres -- psql -q -c 'select pg_reload_conf()' >/dev/null
+    info "pg_hba: acesso por senha para hapm em 127.0.0.1"
+  fi
+  DB_URL=jdbc:postgresql://127.0.0.1:5432/hapm DB_USER=hapm DB_PASS_FILE=$pwfile
+}
+((WITH_PG)) && setup_postgres
 
 ENV=/etc/hapm-manager/manager.env
 [[ -f $ENV ]] || { install -m 0600 -o hapm -g hapm /dev/null "$ENV"; echo '# Gerenciado pelo install-manager.sh do HAPM' > "$ENV"; }
@@ -88,7 +134,7 @@ chown hapm:hapm "$ENV"; chmod 0600 "$ENV"
 cat <<'UNIT' | write_if_changed /etc/systemd/system/hapm-manager.service 0644 && changed=1
 [Unit]
 Description=HAPM manager (control plane HAProxy/Keepalived)
-After=network-online.target
+After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
@@ -113,6 +159,7 @@ systemctl enable -q hapm-manager
 if ((changed)) || ! systemctl is-active -q hapm-manager; then systemctl restart hapm-manager; fi
 wait_http "http://127.0.0.1:$PORT/actuator/health" 90 || die "manager não respondeu (veja: journalctl -u hapm-manager)"
 log "manager pronto em http://$(hostname -f 2>/dev/null || hostname):$PORT"
+if grep -q '^HAPM_DB_URL=jdbc:postgresql' "$ENV"; then info "banco: PostgreSQL ($(grep '^HAPM_DB_URL=' "$ENV" | cut -d= -f2-))"; else info "banco: SQLite (/var/lib/hapm-manager/hapm.db)"; fi
 if ! grep -q '^HAPM_ADMIN_PASSWORD=' "$ENV"; then
   info "senha inicial do admin: journalctl -u hapm-manager | grep 'usuário inicial'"
 fi
