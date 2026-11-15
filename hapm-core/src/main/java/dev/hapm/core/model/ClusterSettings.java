@@ -1,5 +1,6 @@
 package dev.hapm.core.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
@@ -42,7 +43,7 @@ public record ClusterSettings(
   public record Keepalived(
       @JsonProperty("interface") String iface,
       Integer routerId,
-      List<String> vips,
+      @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> vips,
       String authPass,
       Integer advertInt,
       Boolean unicast,

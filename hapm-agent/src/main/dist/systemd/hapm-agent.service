@@ -6,8 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/hapm/agent.env
-ExecStartPre=/usr/bin/node /opt/hapm-agent/src/index.js --bootstrap
-ExecStart=/usr/bin/node /opt/hapm-agent/src/index.js
+Environment="JAVA_OPTS=-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xss512k"
+ExecStartPre=/usr/bin/java $JAVA_OPTS -jar /opt/hapm-agent/hapm-agent.jar --bootstrap
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/hapm-agent/hapm-agent.jar
 Restart=always
 RestartSec=3
 # precisa de root para recarregar haproxy/keepalived e gravar em /etc

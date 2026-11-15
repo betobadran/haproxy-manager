@@ -29,7 +29,7 @@ volumes:
 
 services:
   manager:
-    build: ../manager
+    build: ../hapm-manager
     image: hapm-manager
     restart: unless-stopped
     environment:
@@ -58,11 +58,13 @@ services:
       HAPM_NODE_NAME: lb2
     networks: { hanet: { ipv4_address: 172.30.0.12 } }
 
+  # backends de exemplo (busybox httpd, reaproveitando a imagem do nó)
   app1: &app
-    image: node:22-bookworm-slim
-    command: ["node", "/srv/server.js"]
+    image: hapm-lab-node
+    pull_policy: never
+    entrypoint: ["/usr/local/bin/demo-backend.sh"]
     environment: { NAME: app1 }
-    volumes: ["./app/server.js:/srv/server.js:ro"]
+    depends_on: [lb1]
     networks: { hanet: { ipv4_address: 172.30.0.21 } }
   app2:
     <<: *app
