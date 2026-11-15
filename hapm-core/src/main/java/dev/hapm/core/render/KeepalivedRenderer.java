@@ -32,6 +32,8 @@ public final class KeepalivedRenderer {
     var iface = nodeIface != null && !nodeIface.isEmpty() ? nodeIface : k.iface();
     var vips = new ArrayList<>(k.vips());
     if (ClusterSettings.AWS_EIP.equals(s.mode()) && !s.aws().privateVip().isEmpty()) vips.add(s.aws().privateVip() + "/32");
+    // IP de overlay: o tráfego chega roteado pela VPC até a ENI do MASTER; o host só precisa ter o IP configurado
+    if (ClusterSettings.AWS_EIP.equals(s.mode()) && s.aws().routeVip() != null && !s.aws().routeVip().isEmpty()) vips.add(s.aws().routeVip() + "/32");
     var self = node.vrrpAddress();
     var peers = nodes.stream().filter(n -> !n.name().equals(node.name()) && !n.settingsOrEmpty().isDisabled())
         .map(NodeInfo::vrrpAddress).filter(Objects::nonNull).toList();
@@ -62,7 +64,8 @@ public final class KeepalivedRenderer {
     L.add("    priority " + priority(nodes, node));
     L.add("    advert_int " + k.advertInt());
     if (!k.preempt()) L.add("    nopreempt");
-    if (unicast && self != null) {
+    // sem pares (cluster de um nó só): bloco unicast vazio é depreciado no keepalived — omite
+    if (unicast && self != null && !peers.isEmpty()) {
       L.add("    unicast_src_ip " + self);
       L.add("    unicast_peer {");
       for (var p : peers) L.add("        " + p);
@@ -86,17 +89,31 @@ public final class KeepalivedRenderer {
     return String.join("\n", L);
   }
 
-  /** Variáveis usadas pelo keepalived-notify.sh para mover EIP / IP privado no modo aws-eip. */
-  public static String failoverEnv(Cluster cluster) {
+  /** Variáveis usadas pelo keepalived-notify.sh para mover IPs na AWS (modo aws-eip). Por nó: ENI e interface. */
+  public static String failoverEnv(Cluster cluster, NodeInfo node) {
     var s = cluster.settings();
     var L = new ArrayList<String>();
     L.add("# Gerado pelo HAPM - usado por keepalived-notify.sh no modo aws-eip");
     L.add("HAPM_MODE=" + s.mode());
     if (ClusterSettings.AWS_EIP.equals(s.mode())) {
-      L.add("HAPM_AWS_REGION=" + s.aws().region());
-      if (!s.aws().eipAllocationId().isEmpty()) L.add("HAPM_EIP_ALLOCATION_ID=" + s.aws().eipAllocationId());
-      if (!s.aws().privateVip().isEmpty()) L.add("HAPM_PRIVATE_VIP=" + s.aws().privateVip());
+      var a = s.aws();
+      var k = s.keepalived();
+      var ns = node == null ? null : node.settingsOrEmpty();
+      L.add("HAPM_AWS_REGION=" + a.region());
+      L.add("HAPM_IFACE=" + (ns != null && ns.iface() != null && !ns.iface().isEmpty() ? ns.iface() : k.iface()));
+      if (ns != null && ns.awsEniId() != null && !ns.awsEniId().isEmpty()) L.add("HAPM_ENI_ID=" + ns.awsEniId());
+      if (!a.eipAllocationId().isEmpty()) L.add("HAPM_EIP_ALLOCATION_ID=" + a.eipAllocationId());
+      if (!a.privateVip().isEmpty()) L.add("HAPM_PRIVATE_VIP=" + a.privateVip());
+      if (a.routeVip() != null && !a.routeVip().isEmpty()) {
+        L.add("HAPM_ROUTE_VIP=" + a.routeVip());
+        L.add("HAPM_ROUTE_TABLES=" + String.join(",", a.routeTableIds()));
+        L.add("HAPM_MANAGE_SRC_DST_CHECK=" + (Boolean.FALSE.equals(a.manageSourceDestCheck()) ? "0" : "1"));
+      }
     }
     return String.join("\n", L) + "\n";
+  }
+
+  public static String failoverEnv(Cluster cluster) {
+    return failoverEnv(cluster, null);
   }
 }

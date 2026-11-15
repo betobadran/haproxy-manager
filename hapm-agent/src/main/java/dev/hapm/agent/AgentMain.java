@@ -32,17 +32,21 @@ public class AgentMain {
   private final SystemOps sys;
   private final Applier applier;
   private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+  private final TrafficCollector traffic;
 
   private volatile State state = new State(null, false, 0, 0);
   private volatile Integer desiredVersion;
   private volatile boolean heartbeatOk;
   private volatile String haproxyVersion;
   private volatile boolean stop;
+  /** último preflight de failover AWS (modo aws-eip), enviado no heartbeat */
+  volatile dev.hapm.core.model.AgentProtocol.AwsCheck awsCheck;
 
   public AgentMain(AgentConfig cfg) {
     this.cfg = cfg;
     this.sys = new SystemOps();
     this.applier = new Applier(cfg, sys);
+    this.traffic = new TrafficCollector("http://127.0.0.1:" + cfg.statsPort() + "/metrics");
   }
 
   public static void main(String[] args) throws Exception {
@@ -131,11 +135,38 @@ public class AgentMain {
     return res.body();
   }
 
+  private volatile long lastPreflight;
+
+  /**
+   * Modo aws-eip: valida periodicamente (e após cada aplicação) se o failover de IP vai funcionar —
+   * permissões IAM via --dry-run, ENI, subnet, tabelas de rotas — e manda o resultado ao manager.
+   */
+  void maybePreflight(boolean force) {
+    var env = cfg.keepalivedDir().resolve("hapm-failover.env");
+    try {
+      if (!Files.exists(env) || !Files.readString(env).contains("HAPM_MODE=aws-eip")) {
+        awsCheck = null;
+        return;
+      }
+    } catch (IOException e) {
+      return;
+    }
+    if (!force && System.currentTimeMillis() - lastPreflight < 300_000) return;
+    lastPreflight = System.currentTimeMillis();
+    var r = sys.run(List.of(cfg.libDir().resolve("keepalived-notify.sh").toString(), "--preflight"), 90);
+    var lines = r.output().lines().filter(l -> l.matches("^(OK|WARN|FAIL)\t.*")).toList();
+    awsCheck = new dev.hapm.core.model.AgentProtocol.AwsCheck(Instant.now().toString(), r.ok() && lines.stream().noneMatch(l -> l.startsWith("FAIL")),
+        lines.isEmpty() ? List.of("FAIL\t" + r.output().lines().reduce((a, b) -> b).orElse("preflight sem saída")) : lines);
+    if (!awsCheck.ok()) Log.warn("preflight AWS com problemas: " + String.join(" | ", awsCheck.lines()));
+  }
+
   /** Um ciclo: heartbeat e, se preciso, aplica a versão desejada. Retorna segundos até o próximo. */
   double tick() throws Exception {
+    maybePreflight(false);
     HeartbeatResponse res;
     try {
-      var hb = new Heartbeat(cfg.nodeName(), cfg.nodeAddress(), cfg.version(), haproxyVersion, vrrpState(), applier.appliedVersion(), state.lastApply());
+      var hb = new Heartbeat(cfg.nodeName(), cfg.nodeAddress(), cfg.version(), haproxyVersion, vrrpState(), applier.appliedVersion(), state.lastApply(),
+          traffic.collect(), awsCheck);
       res = JSON.readValue(call("POST", "/agent/v1/heartbeat", JSON.writeValueAsString(hb)), HeartbeatResponse.class);
       heartbeatOk = true;
     } catch (IOException e) {
@@ -163,6 +194,7 @@ public class AgentMain {
       var r = applier.apply(bundle);
       state = new State(new LastApply(d.version(), true, null, Instant.now().toString()), state.usesKeepalived(), state.applySuccess() + 1, state.applyFailure());
       Log.info("v" + d.version() + " aplicada em " + r.durationMs() + "ms" + (r.keepalivedChanged() ? " (keepalived recarregado)" : ""));
+      if (r.keepalivedChanged()) maybePreflight(true);
     } catch (Exception e) {
       state = new State(new LastApply(d.version(), false, e.getMessage(), Instant.now().toString()), state.usesKeepalived(), state.applySuccess(), state.applyFailure() + 1);
       Log.error("falha ao aplicar v" + d.version() + ": " + e.getMessage());

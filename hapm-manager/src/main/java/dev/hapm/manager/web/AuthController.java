@@ -30,6 +30,14 @@ public class AuthController {
 
   public record PasswordChange(String current, String password) {}
 
+  /** Preferências de exibição. Valores nulos = padrão (seguir idioma/navegador). */
+  public record Prefs(String lang, String theme, String dateFormat, String timeFormat, String timeZone) {}
+
+  private static final java.util.Set<String> LANGS = java.util.Set.of("pt-BR", "en-US");
+  private static final java.util.Set<String> THEMES = java.util.Set.of("light", "auto", "dark");
+  private static final java.util.Set<String> DATE_FORMATS = java.util.Set.of("auto", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD.MM.YYYY");
+  private static final java.util.Set<String> TIME_FORMATS = java.util.Set.of("auto", "24h", "12h");
+
   private record Attempts(long first, int count) {}
 
   private final Store store;
@@ -111,7 +119,26 @@ public class AuthController {
 
   @GetMapping("/me")
   public Map<String, Object> me(@AuthenticationPrincipal SessionUser user) {
-    return describe(user);
+    var m = describe(user);
+    m.put("prefs", store.getUserPrefs(user.username()).map(j -> store.fromJson(j, Prefs.class)).orElse(null));
+    return m;
+  }
+
+  @org.springframework.web.bind.annotation.PutMapping("/me/prefs")
+  public Prefs savePrefs(@RequestBody Prefs p, @AuthenticationPrincipal SessionUser user) {
+    if (p.lang() != null && !LANGS.contains(p.lang())) throw Http.status(HttpStatus.BAD_REQUEST, "idioma inválido");
+    if (p.theme() != null && !THEMES.contains(p.theme())) throw Http.status(HttpStatus.BAD_REQUEST, "tema inválido");
+    if (p.dateFormat() != null && !DATE_FORMATS.contains(p.dateFormat())) throw Http.status(HttpStatus.BAD_REQUEST, "formato de data inválido");
+    if (p.timeFormat() != null && !TIME_FORMATS.contains(p.timeFormat())) throw Http.status(HttpStatus.BAD_REQUEST, "formato de hora inválido");
+    if (p.timeZone() != null && !p.timeZone().equals("browser")) {
+      try {
+        java.time.ZoneId.of(p.timeZone());
+      } catch (java.time.DateTimeException e) {
+        throw Http.status(HttpStatus.BAD_REQUEST, "fuso horário inválido: " + p.timeZone());
+      }
+    }
+    store.setUserPrefs(user.username(), store.toJson(p));
+    return p;
   }
 
   @PostMapping("/me/password")

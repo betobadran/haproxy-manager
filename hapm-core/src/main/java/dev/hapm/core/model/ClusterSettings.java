@@ -62,7 +62,22 @@ public record ClusterSettings(
       Integer checkFall,
       Integer checkRise) {}
 
-  public record Aws(String region, String eipAllocationId, String privateVip) {}
+  /**
+   * Failover de IP na AWS (modo aws-eip). Combine conforme a topologia:
+   * <ul>
+   *   <li>privateVip: IP privado secundário movido entre ENIs — nós na MESMA subnet;</li>
+   *   <li>routeVip + routeTableIds: IP de "overlay" (fora do CIDR da VPC) cuja rota /32 aponta para a ENI do MASTER —
+   *       funciona com nós em subnets/AZs DIFERENTES (exige source/dest check desligado nas ENIs);</li>
+   *   <li>eipAllocationId: Elastic IP público que acompanha o MASTER (entre AZs também).</li>
+   * </ul>
+   */
+  public record Aws(String region, String eipAllocationId, String privateVip, String routeVip,
+                    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> routeTableIds,
+                    Boolean manageSourceDestCheck) {
+    public Aws(String region, String eipAllocationId, String privateVip) {
+      this(region, eipAllocationId, privateVip, null, null, null);
+    }
+  }
 
   /** backend = host:porta onde o HAProxy alcança o manager para responder o desafio HTTP-01. */
   public record Acme(String email, String backend) {}

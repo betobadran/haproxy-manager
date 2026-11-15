@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, auth } from './api';
 import { useLoad } from './ui';
 import { MeCtx, roleLabel, usePerm, type Me } from './session';
-import { PrefsSwitcher, useT } from './prefs';
+import { PrefsSwitcher, usePrefs, useT } from './prefs';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { ClusterPage } from './pages/Cluster';
@@ -65,10 +65,19 @@ function Loading() {
 export function App() {
   const parts = useHash();
   const [me, setMe] = useState<Me | null>(null);
+  const { attachServer } = usePrefs();
   const token = auth.token;
   useEffect(() => {
-    if (token) api<Me>('GET', '/me').then(setMe, () => setMe(null));
-  }, [token]);
+    if (!token) {
+      attachServer(null, null);
+      return;
+    }
+    api<Me>('GET', '/me').then((m) => {
+      // preferências salvas no servidor valem em qualquer navegador; mudanças são salvas de volta
+      attachServer(m.prefs ?? null, (p) => void api('PUT', '/me/prefs', p).catch(() => {}));
+      setMe(m);
+    }, () => setMe(null));
+  }, [token, attachServer]);
 
   if (parts[0] === 'login') return <Login callback={parts[1] === 'callback'} />;
   if (!token) {

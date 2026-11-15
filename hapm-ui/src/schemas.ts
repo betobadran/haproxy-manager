@@ -62,7 +62,7 @@ export const backendSchema: Row[] = [
 export const clusterSchema: Row[] = [
   { key: 'name', label: 'Nome do cluster' },
   { key: 'settings', type: 'group', label: 'Configurações', fields: [
-    [{ key: 'mode', label: 'Topologia', type: 'select', default: 'onprem-keepalived', options: [['onprem-keepalived', 'On-premise: HAProxy + Keepalived (VIP/VRRP)'], ['aws-nlb', 'AWS: NLB + HAProxy (Auto Scaling)'], ['aws-eip', 'AWS: HAProxy + Keepalived movendo EIP/IP privado']] },
+    [{ key: 'mode', label: 'Topologia', type: 'select', default: 'onprem-keepalived', options: [['onprem-keepalived', 'On-premise: HAProxy + Keepalived (VIP/VRRP)'], ['aws-nlb', 'AWS: NLB + HAProxy (Auto Scaling)'], ['aws-eip', 'AWS: HAProxy + Keepalived com failover de IP entre ENIs']] },
       { key: 'rollout', label: 'Rollout', type: 'select', default: 'sequential', options: [['sequential', 'sequencial (um nó por vez, MASTER por último)'], ['parallel', 'paralelo (MASTER por último)']] }],
     { key: 'autoDeployOnCertRenew', label: 'Publicar automaticamente quando um certificado for renovado (republica só os certificados)', type: 'checkbox', default: true },
     { key: 'approval', label: 'Governança de publicação', type: 'group', fields: [[
@@ -72,7 +72,16 @@ export const clusterSchema: Row[] = [
       [{ key: 'vips', label: 'VIPs (CIDR)', type: 'tokens', placeholder: '192.168.10.100/24' }, { key: 'interface', label: 'Interface', default: 'eth0' }, { key: 'routerId', label: 'virtual_router_id', type: 'number', default: 51 }],
       [{ key: 'authPass', label: 'Senha VRRP (≤8, vazio = gerar)' }, { key: 'advertInt', label: 'advert_int (s)', type: 'number', default: 1 }, { key: 'checkInterval', label: 'Intervalo do check (s)', type: 'number', default: 2 }],
       [{ key: 'unicast', label: 'Unicast (recomendado)', type: 'checkbox', default: true }, { key: 'preempt', label: 'Preempção (volta ao nó de maior prioridade)', type: 'checkbox', default: true }]] },
-    { key: 'aws', label: 'AWS (failover de EIP / IP privado)', type: 'group', showIf: (v) => v.mode === 'aws-eip', fields: [[{ key: 'region', label: 'Região' }, { key: 'eipAllocationId', label: 'EIP allocation id' }, { key: 'privateVip', label: 'IP privado secundário (VIP)' }]] },
+    { key: 'aws', label: 'AWS: failover de IP entre ENIs', type: 'group', showIf: (v) => v.mode === 'aws-eip', fields: [
+      { key: 'region', label: 'Região', placeholder: 'sa-east-1' },
+      { key: 'privateVip', label: 'IP secundário (nós na MESMA subnet)', placeholder: '10.0.1.50',
+        help: 'O novo MASTER reatribui este IP privado à própria ENI. Só funciona se todos os nós estiverem na mesma subnet.' },
+      [{ key: 'routeVip', label: 'IP de overlay (nós em subnets/AZs DIFERENTES)', placeholder: '192.168.250.10' },
+        { key: 'routeTableIds', label: 'Tabelas de rotas a atualizar', type: 'tokens', placeholder: 'rtb-0aaa... rtb-0bbb...' }],
+      { key: 'manageSourceDestCheck', label: 'Desligar o source/dest check das ENIs automaticamente', type: 'checkbox', default: true,
+        help: 'IP de overlay: um IP fora do CIDR da VPC; o novo MASTER aponta a rota /32 nessas tabelas para a própria ENI. Os clientes precisam usar essas tabelas (mesma VPC, ou via Transit Gateway/VPN com rota estática).' },
+      { key: 'eipAllocationId', label: 'Elastic IP (opcional, acompanha o MASTER)', placeholder: 'eipalloc-...' },
+    ] },
     { key: 'acme', label: "ACME / Let's Encrypt", type: 'group', fields: [[{ key: 'email', label: 'E-mail' },
       { key: 'backend', label: 'Manager visto pelo HAProxy (host:porta)', placeholder: '10.0.0.5:8080' }]] },
     { key: 'haproxy', label: 'HAProxy global', type: 'group', fields: [

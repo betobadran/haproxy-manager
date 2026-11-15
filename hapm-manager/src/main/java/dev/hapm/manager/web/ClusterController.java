@@ -35,10 +35,12 @@ public class ClusterController {
 
   private final Store store;
   private final DeployService deploy;
+  private final dev.hapm.manager.service.MetricsService metrics;
 
-  public ClusterController(Store store, DeployService deploy) {
+  public ClusterController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics) {
     this.store = store;
     this.deploy = deploy;
+    this.metrics = metrics;
   }
 
   static String joinToken(ClusterRow c) {
@@ -120,6 +122,7 @@ public class ClusterController {
   public Map<String, Boolean> delete(@PathVariable String cid, Principal p) {
     var c = cluster(cid);
     store.deleteCluster(cid);
+    metrics.forget(cid);
     store.audit(p.getName(), null, "cluster.delete", c.name(), null);
     return Map.of("ok", true);
   }
@@ -146,6 +149,7 @@ public class ClusterController {
       m.put("online", deploy.isOnline(n));
       m.put("priority", c.settings().usesKeepalived() ? KeepalivedRenderer.priority(infos, new NodeInfo(n.name(), n.address(), n.settings())) : null);
       m.put("desired", deploy.desiredFor(cid, n));
+      m.put("aws", metrics.awsCheck(cid, n.name()));
       return (Map<String, Object>) m;
     }).toList();
   }

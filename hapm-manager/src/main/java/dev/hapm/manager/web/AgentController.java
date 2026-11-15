@@ -30,10 +30,12 @@ public class AgentController {
 
   private final Store store;
   private final DeployService deploy;
+  private final dev.hapm.manager.service.MetricsService metrics;
 
-  public AgentController(Store store, DeployService deploy) {
+  public AgentController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics) {
     this.store = store;
     this.deploy = deploy;
+    this.metrics = metrics;
   }
 
   /** Token de join "clusterId.segredo". */
@@ -62,6 +64,8 @@ public class AgentController {
         b.appliedVersion() == null ? 0 : b.appliedVersion(),
         la == null ? null : new LastApply(la.version(), Boolean.TRUE.equals(la.ok()), cut(la.error(), 4000), cut(la.at(), 40)));
     var node = store.upsertHeartbeat(cluster.id(), hb);
+    metrics.record(cluster.id(), node.name(), b.traffic());
+    metrics.recordAws(cluster.id(), node.name(), b.aws());
     deploy.evaluate(cluster.id());
     return new HeartbeatResponse(deploy.desiredFor(cluster.id(), store.getNode(node.id()).orElseThrow()), 5);
   }

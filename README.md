@@ -70,7 +70,11 @@ recebe a versão desejada.
 - **Auditoria** de todas as ações; histórico de versões com diff e rollback.
 - **Vários clusters num só manager:** cada cluster tem topologia própria (on-prem/keepalived, AWS NLB, AWS EIP),
   nós, VIPs, listeners, certificados, histórico de versões, política de aprovação e token de join independentes.
-- **Interface em pt-BR e en-US** (detectado pelo navegador, alternável) e **tema claro / automático / escuro**.
+- **Tela de métricas ao vivo** por cluster ou por nó: req/s e conexões/s por listener, respostas por classe (2xx–5xx),
+  taxa de 5xx, sessões, tráfego, estado de backends e servidores. Os agentes leem o exporter nativo do HAProxy e
+  enviam no heartbeat; o manager guarda 1 h em memória, sem depender de Prometheus (que continua para histórico e alertas).
+- **Interface em pt-BR e en-US** (detectado pelo navegador, alternável) e **tema claro / automático / escuro**;
+  **formato de data, de hora e fuso horário** escolhidos por usuário e salvos na conta.
   O build da UI falha se algum texto novo não tiver tradução (`hapm-ui/scripts/i18n-keys.mjs`).
 - **Login corporativo e governança:** LDAP/Active Directory e OIDC/SSO (Keycloak, Entra ID, Okta), papéis
   VIEWER / OPERATOR / APPROVER / ADMIN a partir dos grupos, e **aprovação de publicação com quatro olhos**
@@ -197,14 +201,17 @@ terraform init && terraform apply
 > ⚠️ Este módulo **ainda não foi validado** com `terraform validate/plan` (não foi possível baixar o Terraform no
 > ambiente em que foi escrito). Revise e rode `terraform validate` antes do primeiro uso.
 
-### Opção 2: Keepalived + Elastic IP / IP privado (topologia **aws-eip**)
-Para quando não se quer NLB (custo, IP fixo de saída, protocolos específicos). Keepalived em **unicast** (a AWS não
-tem multicast); ao virar MASTER, o `keepalived-notify.sh` usa a API da AWS para mover o **EIP** e/ou o
-**IP privado secundário** para a própria ENI. Requer:
-- instance profile com `deploy/aws/eip-failover-iam-policy.json`;
-- `aws` CLI nos nós; security group liberando protocolo 112 entre eles;
-- IP privado secundário só funciona com os nós **na mesma subnet/AZ** (o EIP funciona entre AZs);
-- failover típico de 5–15 s (a chamada à API da AWS domina o tempo).
+### Opção 2: Keepalived + failover de IP entre ENIs (topologia **aws-eip**) — ver [docs/aws-failover.md](docs/aws-failover.md)
+Para quando não se quer NLB (custo, IP fixo, protocolos específicos). Keepalived em **unicast**; ao virar MASTER, o
+nó traz o IP do serviço para a **própria ENI**, tudo configurado pela tela:
+- **mesma subnet:** IP privado secundário reatribuído entre as ENIs;
+- **subnets/AZs diferentes:** IP de *overlay* (fora do CIDR da VPC) com a rota `/32` das tabelas indicadas apontando
+  para a ENI do MASTER (source/dest check desligado automaticamente);
+- **Elastic IP** opcional acompanhando o MASTER.
+
+Cada nó roda um **preflight** (permissões IAM com `--dry-run`, ENI, subnet, tabelas de rotas) e o resultado aparece
+na visão geral do cluster. Requer a política `deploy/aws/eip-failover-iam-policy.json`, AWS CLI nos nós e o
+protocolo 112 liberado entre eles no security group.
 
 ## Observabilidade
 

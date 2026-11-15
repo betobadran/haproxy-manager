@@ -1,6 +1,8 @@
 import { createContext, useContext } from 'react';
 
-export type Me = { username: string; displayName: string; source: string; roles: string[]; effectiveRoles: string[] };
+import type { ServerPrefs } from './prefs';
+
+export type Me = { username: string; displayName: string; source: string; roles: string[]; effectiveRoles: string[]; prefs?: ServerPrefs | null };
 
 export const MeCtx = createContext<Me | null>(null);
 

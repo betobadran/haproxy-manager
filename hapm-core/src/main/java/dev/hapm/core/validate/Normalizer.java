@@ -96,7 +96,9 @@ public final class Normalizer {
         c.integer("keepalived.checkInterval", k.checkInterval(), 1, 60, 2),
         c.integer("keepalived.checkFall", k.checkFall(), 1, 20, 2),
         c.integer("keepalived.checkRise", k.checkRise(), 1, 20, 2));
-    var aws = new ClusterSettings.Aws(c.str(a.region()), c.str(a.eipAllocationId()), c.str(a.privateVip()));
+    var rtbs = c.tokens("aws.routeTableIds", a.routeTableIds());
+    var aws = new ClusterSettings.Aws(c.str(a.region()), c.str(a.eipAllocationId()), c.str(a.privateVip()), c.str(a.routeVip()).replaceAll("/32$", ""),
+        rtbs, c.bool(a.manageSourceDestCheck(), true));
     var outAcme = new ClusterSettings.Acme(c.str(acme.email()), c.str(acme.backend()));
 
     if (!IFACE.matcher(keepalived.iface()).matches()) c.err("keepalived.interface", "interface inválida");
@@ -108,13 +110,18 @@ public final class Normalizer {
     if (!aws.region().isEmpty() && !REGION.matcher(aws.region()).matches()) c.err("aws.region", "região inválida (ex.: us-east-1)");
     if (!aws.eipAllocationId().isEmpty() && !aws.eipAllocationId().matches("^eipalloc-[0-9a-f]+$")) c.err("aws.eipAllocationId", "formato eipalloc-xxxx");
     if (!aws.privateVip().isEmpty() && Checks.ipVersion(aws.privateVip()) != 4) c.err("aws.privateVip", "IPv4 inválido");
+    if (!aws.routeVip().isEmpty() && Checks.ipVersion(aws.routeVip()) != 4) c.err("aws.routeVip", "IPv4 inválido (ex.: 192.168.250.10)");
+    for (var r : rtbs) if (!r.matches("^rtb-[0-9a-f]{8,17}$")) c.err("aws.routeTableIds", "id de tabela de rotas inválido \"" + r + "\" (formato rtb-xxxx)");
+    if (!aws.routeVip().isEmpty() && rtbs.isEmpty()) c.err("aws.routeTableIds", "informe as tabelas de rotas que devem apontar o IP de overlay para o MASTER");
+    if (!aws.routeVip().isEmpty() && aws.routeVip().equals(aws.privateVip())) c.err("aws.routeVip", "o IP de overlay deve ser diferente do IP secundário");
     if (!outAcme.backend().isEmpty()) {
       var m = Pattern.compile("^(.+):(\\d+)$").matcher(outAcme.backend());
       if (!m.matches() || !(Checks.isIp(m.group(1)) || HOSTNAME.matcher(m.group(1)).matches())) c.err("acme.backend", "formato host:porta");
     }
     if (!outAcme.email().isEmpty() && !EMAIL.matcher(outAcme.email()).matches()) c.err("acme.email", "e-mail inválido");
     if (ClusterSettings.AWS_EIP.equals(mode)) {
-      if (aws.eipAllocationId().isEmpty() && aws.privateVip().isEmpty()) c.err("aws", "modo aws-eip exige eipAllocationId e/ou privateVip");
+      if (aws.eipAllocationId().isEmpty() && aws.privateVip().isEmpty() && aws.routeVip().isEmpty())
+        c.err("aws", "o failover AWS exige ao menos um: IP secundário (mesma subnet), IP de overlay via tabela de rotas (subnets diferentes) ou Elastic IP");
       if (aws.region().isEmpty()) c.err("aws.region", "obrigatório no modo aws-eip");
     }
     c.done();
@@ -132,7 +139,8 @@ public final class Normalizer {
     var c = new Checks.Ctx();
     var i = or(in, NodeSettings.EMPTY);
     var out = new NodeSettings(
-        c.integer("priority", i.priority(), 1, 254, null), c.str(i.iface()), c.str(i.unicastAddress()), c.bool(i.disabled(), false));
+        c.integer("priority", i.priority(), 1, 254, null), c.str(i.iface()), c.str(i.unicastAddress()), c.bool(i.disabled(), false), c.str(i.awsEniId()));
+    if (!out.awsEniId().isEmpty() && !out.awsEniId().matches("^eni-[0-9a-f]{8,17}$")) c.err("awsEniId", "id de ENI inválido (formato eni-xxxx)");
     if (!out.iface().isEmpty() && !IFACE.matcher(out.iface()).matches()) c.err("interface", "interface inválida");
     if (!out.unicastAddress().isEmpty() && !Checks.isIp(out.unicastAddress())) c.err("unicastAddress", "IP inválido");
     c.done();

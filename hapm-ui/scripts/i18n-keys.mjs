@@ -24,6 +24,9 @@ for (const f of files) {
   // tuplas [valor, rótulo] usadas em options, abas, colunas e badges
   for (const m of src.matchAll(/\[\s*'[^']*'\s*,\s*'((?:[^'\\]|\\.)*)'\s*(?:,\s*'[^']*'\s*)?\]/g)) add(m[1]);
   for (const m of src.matchAll(/:\s*\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*'b-[a-z]+'\s*\]/g)) add(m[1]);
+  // <Badge text="..."> e text={cond ? '...' : '...'} (o Badge traduz o texto)
+  for (const m of src.matchAll(/\btext="([^"]+)"/g)) add(m[1]);
+  for (const m of src.matchAll(/\btext=\{([^}]*)\}/g)) for (const q of m[1].matchAll(/'((?:[^'\\]|\\.)*)'/g)) add(q[1]);
   for (const m of src.matchAll(/(?:const cols = [^\n]*)/g)) for (const s of m[0].matchAll(/'([^']+)'/g)) add(s[1]);
   for (const m of src.matchAll(/ROLE_LABEL[^=]*=\s*\{([^}]*)\}/g)) for (const s of m[1].matchAll(/:\s*'([^']+)'/g)) add(s[1]);
 }

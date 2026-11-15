@@ -126,6 +126,14 @@ public class Store {
           .params(username, source, displayName, String.join(",", roles), now(), now()).update();
   }
 
+  public Optional<String> getUserPrefs(String username) {
+    return jdbc.sql("SELECT prefs FROM users WHERE username = ?").param(username).query((rs, i) -> rs.getString(1)).optional().filter(java.util.Objects::nonNull);
+  }
+
+  public void setUserPrefs(String username, String prefsJson) {
+    jdbc.sql("UPDATE users SET prefs = ? WHERE username = ?").params(prefsJson, username).update();
+  }
+
   public void touchLogin(String username) {
     jdbc.sql("UPDATE users SET last_login = ? WHERE username = ?").params(now(), username).update();
   }

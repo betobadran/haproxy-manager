@@ -2,16 +2,36 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "HapmKeepalivedFailover",
+      "Sid": "HapmFailoverRead",
       "Effect": "Allow",
       "Action": [
-        "ec2:AssociateAddress",
-        "ec2:DisassociateAddress",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeAddresses",
+        "ec2:DescribeInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "HapmFailoverSecondaryIpAndEip",
+      "Effect": "Allow",
+      "Action": [
         "ec2:AssignPrivateIpAddresses",
         "ec2:UnassignPrivateIpAddresses",
-        "ec2:DescribeAddresses",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeInstances"
+        "ec2:AssociateAddress",
+        "ec2:DisassociateAddress"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "HapmFailoverOverlayRoutes",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:ReplaceRoute",
+        "ec2:CreateRoute",
+        "ec2:ModifyNetworkInterfaceAttribute"
       ],
       "Resource": "*"
     }

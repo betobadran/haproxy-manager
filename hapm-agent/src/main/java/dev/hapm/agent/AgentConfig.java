@@ -29,7 +29,8 @@ public record AgentConfig(
     Path vrrpStateFile,
     Path stateDir,
     int metricsPort,
-    String metricsHost) {
+    String metricsHost,
+    Path libDir) {
 
   public static final String VERSION = "0.1.0";
 
@@ -61,7 +62,8 @@ public record AgentConfig(
         Path.of(g.apply("HAPM_VRRP_STATE_FILE", "/var/lib/hapm/vrrp_state")),
         Path.of(g.apply("HAPM_STATE_DIR", "/var/lib/hapm")),
         Integer.parseInt(g.apply("HAPM_METRICS_PORT", "9101")),
-        g.apply("HAPM_METRICS_HOST", "0.0.0.0"));
+        g.apply("HAPM_METRICS_HOST", "0.0.0.0"),
+        Path.of(g.apply("HAPM_LIB_DIR", "/usr/local/lib/hapm")));
   }
 
   static String hostname() {

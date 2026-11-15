@@ -29,7 +29,7 @@ public final class BundleBuilder {
       }
       keepalived = new LinkedHashMap<>();
       keepalived.put("keepalived.conf", KeepalivedRenderer.render(snap.cluster(), nodes, self, version));
-      keepalived.put("hapm-failover.env", KeepalivedRenderer.failoverEnv(snap.cluster()));
+      keepalived.put("hapm-failover.env", KeepalivedRenderer.failoverEnv(snap.cluster(), self));
     }
     return new Bundle(version, snap.cluster().name(), files, keepalived, Bundle.digest(version, files, keepalived));
   }

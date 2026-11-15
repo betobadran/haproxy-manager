@@ -5,9 +5,10 @@ import { backendSchema, clusterSchema, frontendSchema } from '../schemas';
 import { Badge, daysLeft, useAction, useLoad, useToast } from '../ui';
 import { usePerm } from '../session';
 import { useFmt, useT, useTs } from '../prefs';
+import { MetricsTab } from './Metrics';
 
 const TABS: [string, string][] = [
-  ['', 'Visão geral'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
+  ['', 'Visão geral'], ['metrics', 'Métricas'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
   ['publish', 'Publicar'], ['approvals', 'Aprovações'], ['history', 'Histórico'], ['settings', 'Configurações'],
 ];
 
@@ -35,6 +36,7 @@ export function ClusterPage({ cid, tab, sub }: { cid: string; tab: string; sub?:
         ))}
       </div>
       {tab === '' && <Overview cluster={cluster} />}
+      {tab === 'metrics' && <MetricsTab cluster={cluster} />}
       {(tab === 'frontends' || tab === 'backends') && <Objects key={tab + (sub ?? '')} cluster={cluster} kind={tab} sub={sub} />}
       {tab === 'certificates' && <Certificates cluster={cluster} />}
       {tab === 'publish' && <Publish cluster={cluster} />}
@@ -72,13 +74,21 @@ function Overview({ cluster }: { cluster: any }) {
   const masters = online.filter((n) => n.vrrpState === 'MASTER');
   const keep = cluster.settings.mode !== 'aws-nlb';
   const latest = deps[0];
-  const vips = [...(cluster.settings.keepalived?.vips ?? []), cluster.settings.aws?.privateVip].filter(Boolean);
+  const aws = cluster.settings.mode === 'aws-eip' ? cluster.settings.aws ?? {} : null;
+  const vips = [...(cluster.settings.keepalived?.vips ?? []), aws?.privateVip, aws?.routeVip].filter(Boolean);
 
   const editPrio = (n: any) => run(async () => {
     const v = prompt(t('Prioridade VRRP de {name} (1-254, vazio = automática)', { name: n.name }), n.settings?.priority ?? '');
     if (v === null) return;
     await api('PUT', `/clusters/${cluster.id}/nodes/${n.id}`, { settings: { ...n.settings, priority: v === '' ? null : Number(v) } });
     toast(t('prioridade salva — publique para aplicar no keepalived'));
+    reload();
+  });
+  const editEni = (n: any) => run(async () => {
+    const v = prompt(t('ENI de {name} que recebe os IPs no failover (vazio = ENI da interface do VRRP, descoberta automaticamente)', { name: n.name }), n.settings?.awsEniId ?? '');
+    if (v === null) return;
+    await api('PUT', `/clusters/${cluster.id}/nodes/${n.id}`, { settings: { ...n.settings, awsEniId: v.trim() } });
+    toast(t('ENI salva — publique para aplicar no keepalived'));
     reload();
   });
   const del = (n: any) => run(async () => {
@@ -102,6 +112,17 @@ function Overview({ cluster }: { cluster: any }) {
         {keep && <div className="stat"><div className="k">VIPs</div><div className="v" style={{ fontSize: 15 }}>{vips.join(', ') || '—'}</div></div>}
         <div className="stat"><div className="k">{t('Versão publicada')}</div><div className="v">{latest ? <>v{latest.version} <Badge s={latest.status} /></> : '—'}</div></div>
       </div>
+      {aws && (
+        <div className="panel">
+          <h3>{t('Failover de IP na AWS')}</h3>
+          <ul className="checks">
+            {aws.privateVip && <li>{t('IP secundário {ip} movido entre as ENIs dos nós (nós na mesma subnet)', { ip: aws.privateVip })}</li>}
+            {aws.routeVip && <li>{t('IP de overlay {ip}: rota /32 nas tabelas {rtbs} aponta para a ENI do MASTER (nós em subnets diferentes)', { ip: aws.routeVip, rtbs: (aws.routeTableIds ?? []).join(', ') })}</li>}
+            {aws.eipAllocationId && <li>{t('Elastic IP {id} associado ao MASTER', { id: aws.eipAllocationId })}</li>}
+          </ul>
+          <p className="muted">{t('Cada nó valida periodicamente permissões IAM (--dry-run), ENI, subnet e tabelas de rotas; o resultado aparece na coluna "Failover AWS".')}</p>
+        </div>
+      )}
       {latest?.error && <div className={`panel ${latest.status === 'failed' ? 'err' : 'muted'}`}>{t('Última publicação')}: {ts(latest.error)}</div>}
       <div className="panel">
         <h3>{t('Nós')}</h3>
@@ -110,7 +131,7 @@ function Overview({ cluster }: { cluster: any }) {
             <thead>
               <tr>
                 <th>{t('Nó')}</th><th>{t('Endereço')}</th><th>{t('Estado')}</th>{keep && <th>VRRP</th>}{keep && <th>{t('Prioridade')}</th>}
-                <th>{t('Versão')}</th><th>{t('Última aplicação')}</th><th>HAProxy</th><th />
+                <th>{t('Versão')}</th><th>{t('Última aplicação')}</th>{aws && <th>{t('Failover AWS')}</th>}<th>HAProxy</th><th />
               </tr>
             </thead>
             <tbody>
@@ -126,6 +147,23 @@ function Overview({ cluster }: { cluster: any }) {
                     {n.lastApply ? <><Badge s={n.lastApply.ok ? 'succeeded' : 'failed'} /> v{n.lastApply.version}</> : '—'}
                     {n.lastApply?.error && <div className="err" style={{ fontSize: 12, maxWidth: 420 }}>{ts(n.lastApply.error).slice(0, 400)}</div>}
                   </td>
+                  {aws && (
+                    <td>
+                      <div className="muted" style={{ fontSize: 12 }}>ENI: {n.settings?.awsEniId || t('automática')} {canEdit && <button className="small" onClick={editEni(n)}>{t('editar')}</button>}</div>
+                      {n.aws ? (
+                        <details>
+                          <summary><Badge s={n.aws.ok ? 'succeeded' : 'failed'} text={n.aws.ok ? 'preflight ok' : 'preflight com problemas'} /></summary>
+                          <ul className="checks">
+                            {n.aws.lines.map((l: string, i: number) => {
+                              const [lvl, ...msg] = l.split('\t');
+                              return <li key={i} className={lvl === 'FAIL' ? 'err' : lvl === 'WARN' ? 'b-warn' : ''}><b>{lvl}</b> {msg.join(' ')}</li>;
+                            })}
+                          </ul>
+                          <div className="muted" style={{ fontSize: 11 }}>{fmt.date(n.aws.at)}</div>
+                        </details>
+                      ) : <span className="muted">{t('aguardando preflight')}</span>}
+                    </td>
+                  )}
                   <td className="muted">{n.haproxyVersion || '—'}</td>
                   <td>{isAdmin && <button className="small danger" onClick={del(n)}>{t('remover')}</button>}</td>
                 </tr>
@@ -180,7 +218,7 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
     });
     return (
       <div className="panel">
-        <h3>{sub === 'new' ? t(isFe ? 'Novo listener' : 'Novo backend') : `${label}: ${form.name}`}</h3>
+        <h3>{sub === 'new' ? (isFe ? t('Novo listener') : t('Novo backend')) : `${label}: ${form.name}`}</h3>
         <Fields rows={schema} value={form} onChange={setForm} ctx={{ backends }} />
         <div className="actions">
           {canEdit && <button className="primary" onClick={save}>{t('Salvar')}</button>}
@@ -198,7 +236,7 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
     <div className="panel">
       <div className="top">
         <h3 style={{ margin: 0 }}>{isFe ? t('Listeners (frontends)') : 'Backends'}</h3>
-        {canEdit && <a className="btn" href={`#/c/${cluster.id}/${kind}/new`}>+ {t(isFe ? 'Novo listener' : 'Novo backend')}</a>}
+        {canEdit && <a className="btn" href={`#/c/${cluster.id}/${kind}/new`}>+ {(isFe ? t('Novo listener') : t('Novo backend'))}</a>}
       </div>
       {items.length ? (
         <table>

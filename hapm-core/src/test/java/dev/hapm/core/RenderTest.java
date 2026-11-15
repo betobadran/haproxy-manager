@@ -97,6 +97,39 @@ class RenderTest {
   }
 
   @Test
+  void awsCrossSubnetOverlayIpViaRouteTables() {
+    var aws = new ClusterSettings.Aws("sa-east-1", null, null, "192.168.250.10/32", List.of("rtb-0aaa1111bbbb2222c rtb-0ccc3333dddd4444e"), null);
+    var n = Normalizer.cluster("x", new ClusterSettings("aws-eip", null, null, null, null, aws, null), null);
+    assertThat(n.settings().aws().routeVip()).isEqualTo("192.168.250.10");
+    assertThat(n.settings().aws().routeTableIds()).containsExactly("rtb-0aaa1111bbbb2222c", "rtb-0ccc3333dddd4444e");
+    assertThat(n.settings().aws().manageSourceDestCheck()).isTrue();
+    var c = new Cluster("x", n.name(), n.settings());
+    var eni = Normalizer.nodeSettings(new dev.hapm.core.model.NodeSettings(null, "ens5", null, null, "eni-0ddd3333eeee4444f"));
+    var nodes = List.of(new NodeInfo("a", "10.0.1.10", eni), new NodeInfo("b", "10.0.2.10", null));
+    assertThat(KeepalivedRenderer.render(c, nodes, nodes.get(0), 1)).contains("192.168.250.10/32 dev ens5").contains("unicast_peer");
+    assertThat(KeepalivedRenderer.failoverEnv(c, nodes.get(0))).contains("HAPM_ROUTE_VIP=192.168.250.10")
+        .contains("HAPM_ROUTE_TABLES=rtb-0aaa1111bbbb2222c,rtb-0ccc3333dddd4444e").contains("HAPM_ENI_ID=eni-0ddd3333eeee4444f")
+        .contains("HAPM_IFACE=ens5").contains("HAPM_MANAGE_SRC_DST_CHECK=1");
+    // o outro nó usa a ENI da própria interface (descoberta via IMDS)
+    assertThat(KeepalivedRenderer.failoverEnv(c, nodes.get(1))).doesNotContain("HAPM_ENI_ID").contains("HAPM_IFACE=eth0");
+  }
+
+  @Test
+  void awsFailoverValidation() {
+    var noTables = new ClusterSettings.Aws("sa-east-1", null, null, "192.168.250.10", null, null);
+    assertThatThrownBy(() -> Normalizer.cluster("x", new ClusterSettings("aws-eip", null, null, null, null, noTables, null), null))
+        .hasMessageContaining("tabelas de rotas");
+    var badRtb = new ClusterSettings.Aws("sa-east-1", null, null, "192.168.250.10", List.of("rtb-xyz"), null);
+    assertThatThrownBy(() -> Normalizer.cluster("x", new ClusterSettings("aws-eip", null, null, null, null, badRtb, null), null))
+        .hasMessageContaining("rtb-xyz");
+    var nothing = new ClusterSettings.Aws("sa-east-1", null, null, null, null, null);
+    assertThatThrownBy(() -> Normalizer.cluster("x", new ClusterSettings("aws-eip", null, null, null, null, nothing, null), null))
+        .hasMessageContaining("ao menos um");
+    assertThatThrownBy(() -> Normalizer.nodeSettings(new dev.hapm.core.model.NodeSettings(null, null, null, null, "eni-bad")))
+        .hasMessageContaining("ENI");
+  }
+
+  @Test
   void bundleDigestIsStable() throws Exception {
     var s = Fixtures.snapshot();
     var b = BundleBuilder.build(s, HaproxyRenderer.render(s, 1, ""), 1, s.nodes().get(0));
