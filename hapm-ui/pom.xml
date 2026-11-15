@@ -42,23 +42,8 @@
             <goals><goal>npm</goal></goals>
             <phase>compile</phase>
             <configuration>
-              <arguments>run build</arguments>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <artifactId>maven-resources-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy-dist</id>
-            <phase>process-classes</phase>
-            <goals><goal>copy-resources</goal></goals>
-            <configuration>
-              <outputDirectory>${project.build.outputDirectory}/META-INF/resources</outputDirectory>
-              <resources>
-                <resource><directory>${project.basedir}/dist</directory></resource>
-              </resources>
+              <!-- o Vite escreve direto no classpath e limpa o diretório: nenhum asset antigo sobra no jar -->
+              <arguments>run build -- --outDir ${project.build.outputDirectory}/META-INF/resources --emptyOutDir</arguments>
             </configuration>
           </execution>
         </executions>

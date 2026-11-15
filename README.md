@@ -68,6 +68,10 @@ recebe a versão desejada.
   HTTP-01** com renovação automática (30 dias antes) e publicação automática após renovar.
 - **Nós:** auto-registro, prioridade VRRP (automática ou manual), estado MASTER/BACKUP, versão aplicada, erros.
 - **Auditoria** de todas as ações; histórico de versões com diff e rollback.
+- **Vários clusters num só manager:** cada cluster tem topologia própria (on-prem/keepalived, AWS NLB, AWS EIP),
+  nós, VIPs, listeners, certificados, histórico de versões, política de aprovação e token de join independentes.
+- **Interface em pt-BR e en-US** (detectado pelo navegador, alternável) e **tema claro / automático / escuro**.
+  O build da UI falha se algum texto novo não tiver tradução (`hapm-ui/scripts/i18n-keys.mjs`).
 - **Login corporativo e governança:** LDAP/Active Directory e OIDC/SSO (Keycloak, Entra ID, Okta), papéis
   VIEWER / OPERATOR / APPROVER / ADMIN a partir dos grupos, e **aprovação de publicação com quatro olhos**
   (quem pede não aprova), publicação emergencial auditada. Detalhes em [docs/autenticacao.md](docs/autenticacao.md).
@@ -110,6 +114,8 @@ Os testes usam `haproxy` e `keepalived` reais quando instalados (são pulados se
 teste ponta a ponta com manager + agente + HAProxy em master-worker.
 
 Desenvolvimento da UI com hot reload: `cd hapm-ui && npx vite` (faz proxy de `/api` para o manager em `:8080`).
+Traduções: os textos pt-BR são a chave e `hapm-ui/src/i18n.en.ts` traz o en-US. Mensagens de validação vindas da
+API ainda são exibidas em pt-BR.
 
 ## Lab completo em Docker
 

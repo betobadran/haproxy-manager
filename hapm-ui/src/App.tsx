@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { api, auth } from './api';
 import { useLoad } from './ui';
-import { MeCtx, usePerm, type Me } from './session';
+import { MeCtx, roleLabel, usePerm, type Me } from './session';
+import { PrefsSwitcher, useT } from './prefs';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { ClusterPage } from './pages/Cluster';
@@ -18,11 +19,11 @@ function useHash() {
   return hash.replace(/^#\/?/, '').split('?')[0].split('/').filter(Boolean);
 }
 
-const ROLE_LABEL: Record<string, string> = { VIEWER: 'leitura', OPERATOR: 'operador', APPROVER: 'aprovador', ADMIN: 'admin' };
 
 function Layout({ active, children }: { active: string; children: ReactNode }) {
   const { data: clusters } = useLoad<any[]>(() => api('GET', '/clusters'), [active], 15000);
   const { me, isAdmin } = usePerm();
+  const t = useT();
   const logout = () => {
     auth.set(null);
     location.hash = '#/login';
@@ -32,27 +33,33 @@ function Layout({ active, children }: { active: string; children: ReactNode }) {
       <nav className="side">
         <h1>HAPM</h1>
         <div className="sub">HAProxy HA Manager</div>
-        <a href="#/" className={active === 'home' ? 'active' : ''}>Clusters</a>
-        <div className="section">Clusters</div>
+        <a href="#/" className={active === 'home' ? 'active' : ''}>{t('Clusters')}</a>
+        <div className="section">{t('Clusters')}</div>
         {(clusters ?? []).map((c) => (
           <a key={c.id} href={`#/c/${c.id}`} className={active === c.id ? 'active' : ''}>{c.name}</a>
         ))}
-        <div className="section">Sistema</div>
-        <a href="#/audit" className={active === 'audit' ? 'active' : ''}>Auditoria</a>
-        {isAdmin && <a href="#/users" className={active === 'users' ? 'active' : ''}>Usuários</a>}
-        <a href="#/account" className={active === 'account' ? 'active' : ''}>Conta</a>
-        <a href="#/login" onClick={logout}>Sair</a>
+        <div className="section">{t('Sistema')}</div>
+        <a href="#/audit" className={active === 'audit' ? 'active' : ''}>{t('Auditoria')}</a>
+        {isAdmin && <a href="#/users" className={active === 'users' ? 'active' : ''}>{t('Usuários')}</a>}
+        <a href="#/account" className={active === 'account' ? 'active' : ''}>{t('Conta')}</a>
+        <a href="#/login" onClick={logout}>{t('Sair')}</a>
         {me && (
           <div className="whoami">
             <b>{me.displayName}</b>
             <div>{me.username} · {me.source}</div>
-            <div>{me.roles.map((r) => ROLE_LABEL[r] ?? r).join(', ')}</div>
+            <div>{me.roles.map((r) => roleLabel(t, r)).join(', ')}</div>
           </div>
         )}
+        <PrefsSwitcher />
       </nav>
       <main className="main">{children}</main>
     </div>
   );
+}
+
+function Loading() {
+  const t = useT();
+  return <p className="muted" style={{ padding: 20 }}>{t('carregando...')}</p>;
 }
 
 export function App() {
@@ -68,7 +75,7 @@ export function App() {
     location.hash = '#/login';
     return null;
   }
-  if (!me) return <p className="muted" style={{ padding: 20 }}>carregando...</p>;
+  if (!me) return <Loading />;
   let page: ReactNode;
   let active = 'home';
   if (parts[0] === 'c' && parts[1]) {

@@ -1,5 +1,6 @@
 // Formulários dirigidos por schema: o mesmo componente desenha listeners, backends e configurações.
 import type { ReactNode } from 'react';
+import { useT } from './prefs';
 
 export type Opt = string | [string, string];
 export type FieldDef = {
@@ -22,13 +23,15 @@ export type Row = FieldDef | FieldDef[];
 const defaultOf = (d: FieldDef) => (typeof d.default === 'function' ? d.default() : d.default);
 
 function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onChange: (v: any) => void; ctx: any }) {
+  const t = useT();
   const v = value === undefined || value === null ? defaultOf(def) : value;
+  const label = def.label ? t(def.label) : undefined;
   let node: ReactNode;
   switch (def.type ?? 'text') {
     case 'checkbox':
       node = (
         <label className="cb">
-          <input type="checkbox" checked={!!v} onChange={(e) => onChange(e.target.checked)} /> {def.label}
+          <input type="checkbox" checked={!!v} onChange={(e) => onChange(e.target.checked)} /> {label}
         </label>
       );
       break;
@@ -36,11 +39,11 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
       const opts = typeof def.options === 'function' ? def.options(ctx) : def.options ?? [];
       node = (
         <label className="f">
-          <span>{def.label}</span>
+          <span>{label}</span>
           <select value={v ?? ''} onChange={(e) => onChange(e.target.value)}>
             {opts.map((o) => {
               const [val, lab] = Array.isArray(o) ? o : [o, o];
-              return <option key={val} value={val}>{lab}</option>;
+              return <option key={val} value={val}>{t(lab)}</option>;
             })}
           </select>
         </label>
@@ -50,7 +53,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
     case 'textarea':
       node = (
         <label className="f">
-          <span>{def.label}</span>
+          <span>{label}</span>
           <textarea className={def.mono ? 'mono' : ''} rows={def.rows ?? 4} placeholder={def.placeholder} value={v ?? ''} onChange={(e) => onChange(e.target.value)} />
         </label>
       );
@@ -58,7 +61,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
     case 'tokens':
       node = (
         <label className="f">
-          <span>{def.label}</span>
+          <span>{label}</span>
           <input placeholder={def.placeholder} value={Array.isArray(v) ? v.join(' ') : v ?? ''}
             onChange={(e) => onChange(e.target.value.split(/[\s,]+/).filter(Boolean).length ? e.target.value.split(/[\s,]+/) : [])} />
         </label>
@@ -67,7 +70,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
     case 'number':
       node = (
         <label className="f">
-          <span>{def.label}</span>
+          <span>{label}</span>
           <input type="number" placeholder={def.placeholder} value={v ?? ''} onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} />
         </label>
       );
@@ -75,7 +78,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
     case 'group':
       node = (
         <fieldset>
-          <legend>{def.label}</legend>
+          <legend>{label}</legend>
           <Fields rows={def.fields ?? []} value={v ?? {}} onChange={onChange} ctx={ctx} />
         </fieldset>
       );
@@ -84,14 +87,14 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
       const items: any[] = Array.isArray(v) ? v : [];
       node = (
         <fieldset>
-          <legend>{def.label}</legend>
+          <legend>{label}</legend>
           {items.map((item, i) => (
             <div className="item" key={i}>
-              <button type="button" className="small danger rm" onClick={() => onChange(items.filter((_, j) => j !== i))}>remover</button>
+              <button type="button" className="small danger rm" onClick={() => onChange(items.filter((_, j) => j !== i))}>{t('remover')}</button>
               <Fields rows={def.fields ?? []} value={item ?? {}} onChange={(nv) => onChange(items.map((x, j) => (j === i ? nv : x)))} ctx={ctx} />
             </div>
           ))}
-          <button type="button" className="small" onClick={() => onChange([...items, def.newItem ? def.newItem() : {}])}>+ {def.addLabel ?? 'adicionar'}</button>
+          <button type="button" className="small" onClick={() => onChange([...items, def.newItem ? def.newItem() : {}])}>+ {t(def.addLabel ?? 'adicionar')}</button>
         </fieldset>
       );
       break;
@@ -99,7 +102,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
     default:
       node = (
         <label className="f">
-          <span>{def.label}</span>
+          <span>{label}</span>
           <input placeholder={def.placeholder} value={v ?? ''} onChange={(e) => onChange(e.target.value)} />
         </label>
       );
@@ -107,7 +110,7 @@ function Field({ def, value, onChange, ctx }: { def: FieldDef; value: any; onCha
   return (
     <>
       {node}
-      {def.help && <div className="muted" style={{ fontSize: 12, marginTop: -6, marginBottom: 8 }}>{def.help}</div>}
+      {def.help && <div className="muted" style={{ fontSize: 12, marginTop: -6, marginBottom: 8 }}>{t(def.help)}</div>}
     </>
   );
 }

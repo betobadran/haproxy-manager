@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useT } from './prefs';
 
 // ------------------------------------------------------------------ toasts
 type Toast = { id: number; msg: string; err: boolean };
@@ -57,21 +58,16 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[], intervalMs?: n
   return { data, error, reload: () => setTick((x) => x + 1) };
 }
 
-// ------------------------------------------------------------------ badges e formatação
+// ------------------------------------------------------------------ badges
 const STATUS: Record<string, [string, string]> = {
   succeeded: ['sucesso', 'b-ok'], failed: ['falhou', 'b-err'], in_progress: ['em andamento', 'b-acc'], superseded: ['substituído', 'b-muted'],
   pending: ['emitindo', 'b-acc'], issued: ['emitido', 'b-ok'], error: ['erro', 'b-err'],
   MASTER: ['MASTER', 'b-ok'], BACKUP: ['BACKUP', 'b-acc'], FAULT: ['FAULT', 'b-err'], STOP: ['STOP', 'b-err'], UNKNOWN: ['?', 'b-muted'],
 };
 export function Badge({ s, text }: { s?: string | null; text?: string }) {
-  const [t, c] = STATUS[s ?? ''] || [s ?? '—', 'b-muted'];
-  return <span className={`badge ${c}`}>{text ?? t}</span>;
+  const t = useT();
+  const [label, c] = STATUS[s ?? ''] || [s ?? '—', 'b-muted'];
+  return <span className={`badge ${c}`}>{t(text ?? label)}</span>;
 }
 
-export const ago = (ms?: number | null) => {
-  if (!ms) return 'nunca';
-  const s = Math.round((Date.now() - ms) / 1000);
-  return s < 60 ? `${s}s atrás` : s < 3600 ? `${Math.round(s / 60)}min atrás` : `${Math.round(s / 3600)}h atrás`;
-};
-export const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleString('pt-BR') : '—');
 export const daysLeft = (s?: string | null) => (s ? Math.floor((Date.parse(s) - Date.now()) / 86400000) : null);

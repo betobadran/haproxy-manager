@@ -4,26 +4,28 @@ import { Fields, withDefaults } from '../form';
 import { clusterSchema } from '../schemas';
 import { Badge, useAction, useLoad, useToast } from '../ui';
 import { usePerm } from '../session';
+import { useT } from '../prefs';
 
 export function Home() {
+  const t = useT();
   const { data: clusters } = useLoad<any[]>(() => api('GET', '/clusters'), [], 10000);
   const [form, setForm] = useState<any>({ settings: {} });
   const run = useAction();
   const toast = useToast();
+  const { isAdmin } = usePerm();
   const create = run(async () => {
     const c = await api('POST', '/clusters', withDefaults(clusterSchema, form));
-    toast('cluster criado');
+    toast(t('cluster criado'));
     location.hash = `#/c/${c.id}`;
   });
-  const { isAdmin } = usePerm();
-  if (!clusters) return <p className="muted">carregando...</p>;
+  if (!clusters) return <p className="muted">{t('carregando...')}</p>;
   return (
     <>
-      <div className="top"><h2>Clusters</h2></div>
+      <div className="top"><h2>{t('Clusters')}</h2></div>
       <div className="panel">
         {clusters.length ? (
           <table>
-            <thead><tr><th>Nome</th><th>Topologia</th><th>Nós online</th><th>MASTER</th><th>Última publicação</th></tr></thead>
+            <thead><tr><th>{t('Nome')}</th><th>{t('Topologia')}</th><th>{t('Nós online')}</th><th>MASTER</th><th>{t('Última publicação')}</th></tr></thead>
             <tbody>
               {clusters.map((c) => (
                 <tr key={c.id}>
@@ -36,12 +38,12 @@ export function Home() {
               ))}
             </tbody>
           </table>
-        ) : <p className="muted">Nenhum cluster ainda. Crie o primeiro abaixo.</p>}
+        ) : <p className="muted">{t('Nenhum cluster ainda. Crie o primeiro abaixo.')}</p>}
       </div>
       {isAdmin && <details className="panel" open={!clusters.length}>
-        <summary><b>Novo cluster</b></summary>
+        <summary><b>{t('Novo cluster')}</b></summary>
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
-        <button className="primary" onClick={create}>Criar cluster</button>
+        <button className="primary" onClick={create}>{t('Criar cluster')}</button>
       </details>}
     </>
   );

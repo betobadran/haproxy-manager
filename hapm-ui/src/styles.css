@@ -1,11 +1,19 @@
 :root {
   --bg: #f5f6f8; --panel: #fff; --text: #1d2330; --muted: #69707d; --border: #dfe2e7;
   --accent: #1f6feb; --accent-text: #fff; --ok: #1a7f37; --warn: #9a6700; --err: #cf222e; --code: #f0f2f5;
-  --side: #111827; --side-text: #d1d5db;
+  --side: #111827; --side-text: #d1d5db; --seg: #1f2937;
+  color-scheme: light;
+}
+/* escuro: escolhido explicitamente, ou "auto" com o sistema em modo escuro */
+:root[data-theme="dark"] {
+  --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #8d96a0; --border: #30363d; --accent: #2f81f7;
+  --ok: #3fb950; --warn: #d29922; --err: #f85149; --code: #0d1117; --side: #010409; color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #8d96a0; --border: #30363d; --accent: #2f81f7;
-    --ok: #3fb950; --warn: #d29922; --err: #f85149; --code: #0d1117; --side: #010409; }
+  :root:not([data-theme="light"]):not([data-theme="dark"]), :root[data-theme="auto"] {
+    --bg: #0d1117; --panel: #161b22; --text: #e6edf3; --muted: #8d96a0; --border: #30363d; --accent: #2f81f7;
+    --ok: #3fb950; --warn: #d29922; --err: #f85149; --code: #0d1117; --side: #010409; color-scheme: dark;
+  }
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
@@ -64,3 +72,12 @@ details summary { cursor: pointer; margin: 6px 0; }
 .tabs .count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: var(--warn); color: #fff; font-size: 11px; text-align: center; }
 a.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .notice { border-left: 4px solid var(--warn); }
+.prefs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.seg { display: flex; border: 1px solid #374151; border-radius: 6px; overflow: hidden; }
+.seg button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--side-text); padding: 4px 6px; font-size: 11.5px; white-space: nowrap; }
+.seg button + button { border-left: 1px solid #374151; }
+.seg button.on { background: var(--accent); color: var(--accent-text); }
+.login-prefs { max-width: 360px; margin: -8vh auto 0; }
+.login-prefs .seg { border-color: var(--border); }
+.login-prefs .seg button { color: var(--text); }
+.login-prefs .seg button + button { border-left-color: var(--border); }

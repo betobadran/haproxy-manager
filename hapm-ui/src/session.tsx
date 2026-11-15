@@ -10,3 +10,6 @@ export function usePerm() {
   const has = (r: string) => !!me?.effectiveRoles.includes(r);
   return { me, canEdit: has('OPERATOR'), canApprove: has('APPROVER'), isAdmin: has('ADMIN') };
 }
+
+const ROLE_LABEL: Record<string, string> = { VIEWER: 'leitura', OPERATOR: 'operador', APPROVER: 'aprovador', ADMIN: 'admin' };
+export const roleLabel = (t: (s: string) => string, r: string) => t(ROLE_LABEL[r] ?? r);
