@@ -1,0 +1,45 @@
+- name: Instala HAProxy
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+
+- name: Sysctls para VIP e alto volume de conexões
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-hapm.conf
+    mode: "0644"
+    content: |
+      # bind no VIP mesmo sendo BACKUP
+      net.ipv4.ip_nonlocal_bind = 1
+      net.ipv6.ip_nonlocal_bind = 1
+      net.core.somaxconn = 65535
+      net.ipv4.ip_local_port_range = 1024 65000
+      net.ipv4.tcp_max_syn_backlog = 65535
+  notify: Aplicar sysctl
+
+- name: Diretórios do HAPM
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0750"
+  loop: [/etc/haproxy/hapm, /run/haproxy]
+
+- name: Garante diretório do drop-in (antes do template)
+  ansible.builtin.file:
+    path: /etc/systemd/system/haproxy.service.d
+    state: directory
+    mode: "0755"
+
+- name: Unit do HAProxy aponta para a release ativa do HAPM (current/haproxy.cfg)
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: /etc/systemd/system/haproxy.service.d/hapm.conf
+    mode: "0644"
+  notify: Recarregar systemd
+
+- name: Aplicar handlers pendentes antes de habilitar o serviço
+  ansible.builtin.meta: flush_handlers
+
+- name: HAProxy habilitado (sobe com a config bootstrap até a 1ª publicação)
+  ansible.builtin.systemd:
+    name: haproxy
+    enabled: true

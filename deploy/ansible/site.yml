@@ -1,0 +1,14 @@
+# Uso:
+#   mvn -q -DskipTests package                      (na raiz do repositório)
+#   ansible-playbook site.yml --ask-vault-pass        (manager + nós)
+#   ansible-playbook site.yml --limit haproxy_nodes   (só os nós, p.ex. após criar o cluster e obter o token)
+- name: HAPM manager (control plane)
+  hosts: hapm_manager
+  become: true
+  roles: [common, hapm_manager]
+
+- name: Nós HAProxy + Keepalived + agente + OTel Collector
+  hosts: haproxy_nodes
+  become: true
+  serial: 1   # um nó por vez: nunca derruba os dois lados do VIP ao mesmo tempo
+  roles: [common, haproxy, keepalived, hapm_agent, otelcol]

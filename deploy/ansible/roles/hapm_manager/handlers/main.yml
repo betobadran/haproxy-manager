@@ -1,0 +1,5 @@
+- name: Reiniciar hapm-manager
+  ansible.builtin.systemd:
+    name: hapm-manager
+    state: restarted
+    daemon_reload: true

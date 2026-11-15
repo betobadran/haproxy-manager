@@ -1,0 +1,36 @@
+# OTel Collector (distribuição contrib) em cada nó: raspa HAProxy (:8405) e agente (:9101)
+# localmente, coleta métricas do host e envia via OTLP ao gateway central.
+- name: Instala otelcol-contrib (.deb)
+  ansible.builtin.apt:
+    deb: "{{ otelcol_download_url }}"
+  when: ansible_os_family == "Debian"
+
+- name: Instala otelcol-contrib (.rpm)
+  ansible.builtin.dnf:
+    name: "{{ otelcol_download_url | replace('_linux_amd64.deb', '_linux_amd64.rpm') }}"
+    disable_gpg_check: true
+  when: ansible_os_family == "RedHat"
+
+- name: Configuração do collector (edge)
+  ansible.builtin.copy:
+    src: "{{ hapm_repo_root }}/observability/otel-collector/node.yaml"
+    dest: /etc/otelcol-contrib/config.yaml
+    mode: "0644"
+  notify: Reiniciar otelcol
+
+- name: Variáveis do collector
+  ansible.builtin.copy:
+    dest: /etc/otelcol-contrib/otelcol-contrib.conf
+    mode: "0644"
+    content: |
+      OTELCOL_OPTIONS="--config=/etc/otelcol-contrib/config.yaml"
+      HAPM_CLUSTER={{ hapm_cluster_name }}
+      HAPM_NODE={{ inventory_hostname }}
+      OTEL_GATEWAY_ENDPOINT={{ otel_gateway_endpoint }}
+  notify: Reiniciar otelcol
+
+- name: Otelcol habilitado
+  ansible.builtin.systemd:
+    name: otelcol-contrib
+    enabled: true
+    state: started

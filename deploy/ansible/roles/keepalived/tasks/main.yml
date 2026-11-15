@@ -1,0 +1,28 @@
+# O keepalived.conf é gerado e publicado pelo HAPM (via agente); aqui só instalamos
+# o pacote e os scripts usados pelo vrrp_script/notify.
+- name: Instala keepalived
+  ansible.builtin.package:
+    name: keepalived
+    state: present
+
+- name: Scripts do HAPM para o keepalived (check do HAProxy e notify/failover AWS)
+  ansible.builtin.copy:
+    src: "{{ hapm_repo_root }}/hapm-agent/src/main/dist/scripts/"
+    dest: /usr/local/lib/hapm/
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Diretório de estado do VRRP
+  ansible.builtin.file:
+    path: /var/lib/hapm
+    state: directory
+    mode: "0755"
+
+# Firewall: VRRP é o protocolo IP 112 (não é porta TCP/UDP). Libere entre os nós:
+#   firewalld: firewall-cmd --permanent --add-rich-rule='rule protocol value="vrrp" accept'
+#   iptables:  iptables -A INPUT -p 112 -s <peer> -j ACCEPT
+- name: Keepalived habilitado (o agente inicia/recarrega quando a 1ª versão chegar)
+  ansible.builtin.systemd:
+    name: keepalived
+    enabled: true

@@ -1,0 +1,18 @@
+[Unit]
+Description=HAPM manager (control plane HAProxy/Keepalived)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=hapm
+EnvironmentFile=/etc/hapm-manager/manager.env
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=50 -XX:+ExitOnOutOfMemoryError -jar /opt/hapm-manager/hapm-manager.jar
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

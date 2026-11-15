@@ -1,0 +1,48 @@
+- name: Usuário e diretórios do manager
+  ansible.builtin.user:
+    name: hapm
+    system: true
+    home: /var/lib/hapm-manager
+    shell: /usr/sbin/nologin
+
+- name: Diretórios
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: hapm
+    mode: "0750"
+  loop: [/opt/hapm-manager, /var/lib/hapm-manager, /etc/hapm-manager]
+
+- name: HAProxy no manager (opcional; usado para validar com haproxy -c antes de publicar)
+  ansible.builtin.package:
+    name: haproxy
+    state: present
+
+- name: Jar do manager
+  ansible.builtin.copy:
+    src: "{{ hapm_manager_jar }}"
+    dest: /opt/hapm-manager/hapm-manager.jar
+    mode: "0644"
+  notify: Reiniciar hapm-manager
+
+- name: Configuração do manager
+  ansible.builtin.template:
+    src: manager.env.j2
+    dest: /etc/hapm-manager/manager.env
+    owner: hapm
+    mode: "0600"
+  notify: Reiniciar hapm-manager
+
+- name: Unit systemd
+  ansible.builtin.template:
+    src: hapm-manager.service.j2
+    dest: /etc/systemd/system/hapm-manager.service
+    mode: "0644"
+  notify: Reiniciar hapm-manager
+
+- name: Manager habilitado
+  ansible.builtin.systemd:
+    name: hapm-manager
+    enabled: true
+    state: started
+    daemon_reload: true

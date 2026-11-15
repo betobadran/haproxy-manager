@@ -1,0 +1,85 @@
+#!/bin/bash
+# Bootstrap de um nó HAProxy do HAPM na AWS (Ubuntu 24.04). Executado pelo cloud-init.
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y haproxy openjdk-21-jre-headless curl ca-certificates unzip
+snap install aws-cli --classic || true
+export AWS_DEFAULT_REGION="${region}"
+
+# identidade do nó = instance-id (IMDSv2)
+IMDS_TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md() { curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+NODE_NAME=$(md instance-id)
+NODE_IP=$(md local-ipv4)
+
+# sysctls (iguais ao role Ansible)
+cat > /etc/sysctl.d/90-hapm.conf <<'SYS'
+net.ipv4.ip_nonlocal_bind = 1
+net.core.somaxconn = 65535
+net.ipv4.ip_local_port_range = 1024 65000
+net.ipv4.tcp_max_syn_backlog = 65535
+SYS
+sysctl --system
+
+# artefatos do HAPM
+mkdir -p /opt/hapm-agent /usr/local/lib/hapm /etc/hapm /var/lib/hapm /etc/haproxy/hapm /etc/systemd/system/haproxy.service.d
+aws s3 cp "${agent_jar_s3_uri}" /opt/hapm-agent/hapm-agent.jar
+aws s3 cp --recursive "${agent_scripts_s3_uri}" /usr/local/lib/hapm/
+chmod 755 /usr/local/lib/hapm/*.sh
+JOIN_TOKEN=$(aws ssm get-parameter --with-decryption --name "${join_token_parameter}" --query Parameter.Value --output text)
+
+cat > /etc/systemd/system/haproxy.service.d/hapm.conf <<'UNIT'
+[Service]
+Environment="CONFIG=/etc/haproxy/hapm/current/haproxy.cfg"
+Environment="PIDFILE=/run/haproxy.pid"
+Environment="EXTRAOPTS=-S /run/haproxy-master.sock"
+LimitNOFILE=1048576
+UNIT
+
+umask 077
+cat > /etc/hapm/agent.env <<ENV
+HAPM_MANAGER_URL=${manager_url}
+HAPM_JOIN_TOKEN=$JOIN_TOKEN
+HAPM_NODE_NAME=$NODE_NAME
+HAPM_NODE_ADDRESS=$NODE_IP
+HAPM_RELOAD_MODE=systemd
+HAPM_METRICS_HOST=127.0.0.1
+ENV
+umask 022
+
+cat > /etc/systemd/system/hapm-agent.service <<'UNIT'
+[Unit]
+Description=HAPM agent
+After=network-online.target haproxy.service
+Wants=network-online.target
+[Service]
+EnvironmentFile=/etc/hapm/agent.env
+Environment="JAVA_OPTS=-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/hapm-agent/hapm-agent.jar
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+HAPM_HAPROXY_DIR=/etc/haproxy/hapm java -jar /opt/hapm-agent/hapm-agent.jar --bootstrap
+systemctl daemon-reload
+systemctl enable --now haproxy
+systemctl restart haproxy
+systemctl enable --now hapm-agent
+
+# OTel Collector (edge) -> gateway
+if [ -n "${otel_gateway_endpoint}" ] && [ -n "${otel_config_s3_uri}" ]; then
+  curl -fsSL -o /tmp/otelcol.deb "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${otelcol_version}/otelcol-contrib_${otelcol_version}_linux_amd64.deb"
+  apt-get install -y /tmp/otelcol.deb
+  aws s3 cp "${otel_config_s3_uri}" /etc/otelcol-contrib/config.yaml
+  cat > /etc/otelcol-contrib/otelcol-contrib.conf <<ENV
+OTELCOL_OPTIONS="--config=/etc/otelcol-contrib/config.yaml"
+HAPM_CLUSTER=${cluster_label}
+HAPM_NODE=$NODE_NAME
+OTEL_GATEWAY_ENDPOINT=${otel_gateway_endpoint}
+ENV
+  systemctl enable --now otelcol-contrib
+  systemctl restart otelcol-contrib
+fi
