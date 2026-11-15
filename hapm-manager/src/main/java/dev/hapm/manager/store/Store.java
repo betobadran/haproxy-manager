@@ -61,9 +61,13 @@ public class Store {
 
   public record DeploymentRow(
       long id, String clusterId, int version, String status, String error, String note, String createdBy, String createdAt, String finishedAt,
-      String snapshotJson, String haproxyCfg) {}
+      String snapshotJson, String haproxyCfg, String approvedBy, Long requestId) {}
 
-  public record UserRow(String username, String passwordHash) {}
+  public record UserRow(String username, String passwordHash, String source, String displayName, java.util.Set<String> roles, String lastLogin, String createdAt) {}
+
+  public record RequestRow(
+      long id, String clusterId, int baseVersion, String status, String note, String requestedBy, String requestedAt, String decidedBy,
+      String decidedAt, String decisionNote, Long deploymentId, String snapshotJson, String haproxyCfg) {}
 
   public record AuditRow(long id, String ts, String username, String clusterId, String action, String target, String detail) {}
 
@@ -76,22 +80,66 @@ public class Store {
     if (jdbc.sql("UPDATE kv SET v = ? WHERE k = ?").params(v, k).update() == 0) jdbc.sql("INSERT INTO kv(k, v) VALUES (?, ?)").params(k, v).update();
   }
 
+  public void deleteKv(String k) {
+    jdbc.sql("DELETE FROM kv WHERE k = ?").param(k).update();
+  }
+
   // ------------------------------------------------------------------ usuários
   public long countUsers() {
     return jdbc.sql("SELECT COUNT(*) FROM users").query(Long.class).single();
   }
 
+  private UserRow user(ResultSet rs, int i) throws SQLException {
+    var roles = new java.util.TreeSet<String>();
+    for (var r : String.valueOf(rs.getString("roles")).split(",")) if (!r.isBlank()) roles.add(r.strip());
+    return new UserRow(rs.getString("username"), rs.getString("password_hash"), rs.getString("source"), rs.getString("display_name"), roles,
+        rs.getString("last_login"), rs.getString("created_at"));
+  }
+
   public Optional<UserRow> getUser(String username) {
-    return jdbc.sql("SELECT username, password_hash FROM users WHERE username = ?").param(username)
-        .query((rs, i) -> new UserRow(rs.getString(1), rs.getString(2))).optional();
+    return jdbc.sql("SELECT * FROM users WHERE username = ?").param(username).query(this::user).optional();
+  }
+
+  public List<UserRow> listUsers() {
+    return jdbc.sql("SELECT * FROM users ORDER BY source, username").query(this::user).list();
   }
 
   public void createUser(String username, String hash) {
-    jdbc.sql("INSERT INTO users(username, password_hash, created_at) VALUES (?, ?, ?)").params(username, hash, now()).update();
+    createLocalUser(username, hash, null, java.util.Set.of("ADMIN"));
+  }
+
+  public void createLocalUser(String username, String hash, String displayName, java.util.Set<String> roles) {
+    jdbc.sql("INSERT INTO users(username, password_hash, source, display_name, roles, created_at) VALUES (?, ?, 'local', ?, ?, ?)")
+        .params(username, hash, displayName, String.join(",", roles), now()).update();
+  }
+
+  public void updateLocalUser(String username, String displayName, java.util.Set<String> roles) {
+    jdbc.sql("UPDATE users SET display_name = ?, roles = ? WHERE username = ? AND source = 'local'").params(displayName, String.join(",", roles), username).update();
+  }
+
+  /** Registra/atualiza um usuário externo (LDAP/OIDC) a cada login: nome e papéis vigentes, para auditoria e listagem. */
+  public void upsertExternalUser(String username, String source, String displayName, java.util.Set<String> roles) {
+    int n = jdbc.sql("UPDATE users SET source = ?, display_name = ?, roles = ?, last_login = ? WHERE username = ? AND source <> 'local'")
+        .params(source, displayName, String.join(",", roles), now(), username).update();
+    if (n == 0)
+      jdbc.sql("INSERT INTO users(username, password_hash, source, display_name, roles, last_login, created_at) VALUES (?, NULL, ?, ?, ?, ?, ?)")
+          .params(username, source, displayName, String.join(",", roles), now(), now()).update();
+  }
+
+  public void touchLogin(String username) {
+    jdbc.sql("UPDATE users SET last_login = ? WHERE username = ?").params(now(), username).update();
   }
 
   public void setPassword(String username, String hash) {
     jdbc.sql("UPDATE users SET password_hash = ? WHERE username = ?").params(hash, username).update();
+  }
+
+  public void deleteUser(String username) {
+    jdbc.sql("DELETE FROM users WHERE username = ?").param(username).update();
+  }
+
+  public long countLocalAdmins() {
+    return jdbc.sql("SELECT COUNT(*) FROM users WHERE source = 'local' AND roles LIKE '%ADMIN%'").query(Long.class).single();
   }
 
   // ------------------------------------------------------------------ clusters
@@ -225,7 +273,7 @@ public class Store {
   private DeploymentRow deployment(ResultSet rs, int i) throws SQLException {
     return new DeploymentRow(rs.getLong("id"), rs.getString("cluster_id"), rs.getInt("version"), rs.getString("status"), rs.getString("error"),
         rs.getString("note"), rs.getString("created_by"), rs.getString("created_at"), rs.getString("finished_at"), rs.getString("snapshot"),
-        rs.getString("haproxy_cfg"));
+        rs.getString("haproxy_cfg"), rs.getString("approved_by"), (Long) rs.getObject("request_id", Long.class));
   }
 
   public List<DeploymentRow> listDeployments(String clusterId, int limit) {
@@ -256,17 +304,67 @@ public class Store {
   /** Cria um deployment; o que estiver em andamento é marcado como substituído. */
   @Transactional
   public DeploymentRow createDeployment(String clusterId, int version, Snapshot snapshot, String haproxyCfg, String note, String createdBy) {
+    return createDeployment(clusterId, version, snapshot, haproxyCfg, note, createdBy, null, null);
+  }
+
+  @Transactional
+  public DeploymentRow createDeployment(String clusterId, int version, Snapshot snapshot, String haproxyCfg, String note, String createdBy,
+                                        String approvedBy, Long requestId) {
     jdbc.sql("UPDATE deployments SET status = 'superseded', finished_at = ? WHERE cluster_id = ? AND status = 'in_progress'").params(now(), clusterId).update();
     jdbc.sql("""
-        INSERT INTO deployments(cluster_id, version, status, note, created_by, created_at, snapshot, haproxy_cfg)
-        VALUES (?, ?, 'in_progress', ?, ?, ?, ?, ?)""")
-        .params(clusterId, version, note, createdBy, now(), toJson(snapshot), haproxyCfg).update();
+        INSERT INTO deployments(cluster_id, version, status, note, created_by, created_at, snapshot, haproxy_cfg, approved_by, request_id)
+        VALUES (?, ?, 'in_progress', ?, ?, ?, ?, ?, ?, ?)""")
+        .params(clusterId, version, note, createdBy, now(), toJson(snapshot), haproxyCfg, approvedBy, requestId).update();
     return getDeploymentByVersion(clusterId, version).orElseThrow();
   }
 
   public void setDeploymentStatus(long id, String status, String error) {
     jdbc.sql("UPDATE deployments SET status = ?, error = ?, finished_at = ? WHERE id = ?")
         .params(status, error, "in_progress".equals(status) ? null : now(), id).update();
+  }
+
+  // ------------------------------------------------------------------ pedidos de publicação
+  private RequestRow request(ResultSet rs, int i) throws SQLException {
+    return new RequestRow(rs.getLong("id"), rs.getString("cluster_id"), rs.getInt("base_version"), rs.getString("status"), rs.getString("note"),
+        rs.getString("requested_by"), rs.getString("requested_at"), rs.getString("decided_by"), rs.getString("decided_at"), rs.getString("decision_note"),
+        (Long) rs.getObject("deployment_id", Long.class), rs.getString("snapshot"), rs.getString("haproxy_cfg"));
+  }
+
+  /** Cria um pedido; pedidos pendentes anteriores do cluster ficam obsoletos (baseados em estado antigo). */
+  @Transactional
+  public RequestRow createRequest(String clusterId, int baseVersion, String note, String requestedBy, Snapshot snapshot, String haproxyCfg) {
+    jdbc.sql("UPDATE publish_requests SET status = 'superseded', decided_at = ? WHERE cluster_id = ? AND status = 'pending'").params(now(), clusterId).update();
+    jdbc.sql("""
+        INSERT INTO publish_requests(cluster_id, base_version, status, note, requested_by, requested_at, snapshot, haproxy_cfg)
+        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?)""")
+        .params(clusterId, baseVersion, note, requestedBy, now(), toJson(snapshot), haproxyCfg).update();
+    return jdbc.sql("SELECT * FROM publish_requests WHERE cluster_id = ? ORDER BY id DESC LIMIT 1").param(clusterId).query(this::request).single();
+  }
+
+  public Optional<RequestRow> getRequest(String clusterId, long id) {
+    return jdbc.sql("SELECT * FROM publish_requests WHERE cluster_id = ? AND id = ?").params(clusterId, id).query(this::request).optional();
+  }
+
+  public List<RequestRow> listRequests(String clusterId, int limit) {
+    return jdbc.sql("SELECT * FROM publish_requests WHERE cluster_id = ? ORDER BY id DESC LIMIT ?").params(clusterId, limit).query(this::request).list();
+  }
+
+  public long countPendingRequests(String clusterId) {
+    return jdbc.sql("SELECT COUNT(*) FROM publish_requests WHERE cluster_id = ? AND status = 'pending'").param(clusterId).query(Long.class).single();
+  }
+
+  /** Muda o status apenas se ainda estiver pendente (evita aprovação dupla concorrente). */
+  public boolean decideRequest(long id, String status, String decidedBy, String decisionNote, Long deploymentId) {
+    return jdbc.sql("UPDATE publish_requests SET status = ?, decided_by = ?, decided_at = ?, decision_note = ?, deployment_id = ? WHERE id = ? AND status = 'pending'")
+        .params(status, decidedBy, now(), decisionNote, deploymentId, id).update() == 1;
+  }
+
+  public void linkRequestDeployment(long id, long deploymentId) {
+    jdbc.sql("UPDATE publish_requests SET deployment_id = ? WHERE id = ?").params(deploymentId, id).update();
+  }
+
+  public void supersedePendingRequests(String clusterId) {
+    jdbc.sql("UPDATE publish_requests SET status = 'superseded', decided_at = ? WHERE cluster_id = ? AND status = 'pending'").params(now(), clusterId).update();
   }
 
   // ------------------------------------------------------------------ ACME

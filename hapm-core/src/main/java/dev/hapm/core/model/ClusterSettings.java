@@ -12,7 +12,17 @@ public record ClusterSettings(
     Haproxy haproxy,
     Keepalived keepalived,
     Aws aws,
-    Acme acme) {
+    Acme acme,
+    Approval approval) {
+
+  /** Compatibilidade: configurações sem política de aprovação explícita. */
+  public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme) {
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null);
+  }
+
+  public boolean approvalRequired() {
+    return approval != null && Boolean.TRUE.equals(approval.required());
+  }
 
   public static final String ONPREM_KEEPALIVED = "onprem-keepalived";
   public static final String AWS_NLB = "aws-nlb";
@@ -56,4 +66,10 @@ public record ClusterSettings(
 
   /** backend = host:porta onde o HAProxy alcança o manager para responder o desafio HTTP-01. */
   public record Acme(String email, String backend) {}
+
+  /**
+   * Governança de publicação: com {@code required}, mudanças só vão para os nós depois que um usuário com
+   * papel APPROVER aprovar o pedido. {@code allowSelfApproval=false} exige outra pessoa (quatro olhos).
+   */
+  public record Approval(Boolean required, Boolean allowSelfApproval) {}
 }

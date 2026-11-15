@@ -64,12 +64,16 @@ public class ClusterController {
     return m;
   }
 
-  Map<String, Object> view(ClusterRow c) {
+  Map<String, Object> view(ClusterRow c, java.security.Principal p) {
     var m = new LinkedHashMap<String, Object>();
     m.put("id", c.id());
     m.put("name", c.name());
     m.put("settings", c.settings());
-    m.put("joinToken", joinToken(c));
+    // o token de join dá acesso às configs (inclui chaves TLS): só ADMIN vê
+    var admin = p instanceof org.springframework.security.core.Authentication a
+        && a.getAuthorities().stream().anyMatch(g -> g.getAuthority().equals("ROLE_ADMIN"));
+    m.put("joinToken", admin ? joinToken(c) : null);
+    m.put("pendingRequests", store.countPendingRequests(c.id()));
     m.put("createdAt", c.createdAt());
     m.put("updatedAt", c.updatedAt());
     m.put("summary", summary(c));
@@ -87,12 +91,12 @@ public class ClusterController {
     if (store.listClusters().stream().anyMatch(c -> c.name().equals(n.name()))) throw Http.status(HttpStatus.CONFLICT, "já existe um cluster com esse nome");
     var c = store.createCluster(n.name(), n.settings());
     store.audit(p.getName(), c.id(), "cluster.create", c.name(), null);
-    return ResponseEntity.status(HttpStatus.CREATED).body(view(c));
+    return ResponseEntity.status(HttpStatus.CREATED).body(view(c, p));
   }
 
   @GetMapping("/{cid}")
-  public Map<String, Object> get(@PathVariable String cid) {
-    return view(cluster(cid));
+  public Map<String, Object> get(@PathVariable String cid, Principal p) {
+    return view(cluster(cid), p);
   }
 
   @PutMapping("/{cid}")
@@ -101,7 +105,7 @@ public class ClusterController {
     var n = Normalizer.cluster(req.name() != null ? req.name() : c.name(), req.settings(), c.settings());
     var u = store.updateCluster(cid, n.name(), n.settings());
     store.audit(p.getName(), cid, "cluster.update", u.name(), null);
-    return view(u);
+    return view(u, p);
   }
 
   @PostMapping("/{cid}/rotate-token")

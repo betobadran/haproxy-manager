@@ -8,7 +8,9 @@ import dev.hapm.manager.service.DeployService;
 import dev.hapm.manager.service.HaproxyChecker;
 import dev.hapm.manager.store.Store;
 import dev.hapm.manager.store.Store.DeploymentRow;
-import java.security.Principal;
+import dev.hapm.manager.security.SessionUser;
+import dev.hapm.manager.service.PublishService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,16 +27,30 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 public class DeploymentController {
-  public record PublishRequest(String note, Boolean validate) {}
+  public record PublishRequest(String note, Boolean validate, Boolean emergency) {}
 
   private final Store store;
   private final DeployService deploy;
   private final HaproxyChecker checker;
+  private final PublishService publish;
 
-  public DeploymentController(Store store, DeployService deploy, HaproxyChecker checker) {
+  public DeploymentController(Store store, DeployService deploy, HaproxyChecker checker, PublishService publish) {
     this.store = store;
     this.deploy = deploy;
     this.checker = checker;
+    this.publish = publish;
+  }
+
+  /** Resposta comum: 201 com a versão publicada ou 202 com o pedido aguardando aprovação. */
+  private static ResponseEntity<Map<String, Object>> result(PublishService.Result r) {
+    if (r instanceof PublishService.Published p) {
+      var m = view(p.deployment());
+      m.put("type", "deployment");
+      return ResponseEntity.status(HttpStatus.CREATED).body(m);
+    }
+    var m = RequestController.view(((PublishService.Requested) r).request());
+    m.put("type", "request");
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(m);
   }
 
   private void cluster(String cid) {
@@ -51,6 +67,8 @@ public class DeploymentController {
     m.put("createdBy", d.createdBy());
     m.put("createdAt", d.createdAt());
     m.put("finishedAt", d.finishedAt());
+    m.put("approvedBy", d.approvedBy());
+    m.put("requestId", d.requestId());
     return m;
   }
 
@@ -108,24 +126,28 @@ public class DeploymentController {
   }
 
   @PostMapping("/clusters/{cid}/deployments")
-  public ResponseEntity<Map<String, Object>> publish(@PathVariable String cid, @RequestBody(required = false) PublishRequest req, Principal p) {
+  public ResponseEntity<Map<String, Object>> publish(@PathVariable String cid, @RequestBody(required = false) PublishRequest req,
+                                                     @AuthenticationPrincipal SessionUser user) {
     cluster(cid);
-    var r = req == null ? new PublishRequest(null, true) : req;
+    var r = req == null ? new PublishRequest(null, true, false) : req;
     if (!Boolean.FALSE.equals(r.validate())) {
       var pv = deploy.preview(cid);
       var check = checker.check(BundleBuilder.build(pv.snapshot(), pv.haproxyCfg(), pv.version(), new NodeInfo("__check__", null, null)));
       if (check.available() && !check.ok())
         return ResponseEntity.unprocessableContent().body(Map.of("error", "haproxy -c falhou", "errors", List.of(check.output())));
     }
-    var d = deploy.create(cid, r.note(), p.getName(), null);
-    return ResponseEntity.status(HttpStatus.CREATED).body(view(d));
+    return result(publish.publish(cid, r.note(), user, Boolean.TRUE.equals(r.emergency()), null));
   }
 
   @PostMapping("/clusters/{cid}/deployments/{did}/rollback")
-  public ResponseEntity<Map<String, Object>> rollback(@PathVariable String cid, @PathVariable long did, Principal p) {
+  public ResponseEntity<Map<String, Object>> rollback(@PathVariable String cid, @PathVariable long did, @RequestBody(required = false) PublishRequest req,
+                                                      @AuthenticationPrincipal SessionUser user) {
     cluster(cid);
-    var d = deploy.rollback(cid, did, p.getName()).orElseThrow(() -> Http.notFound("não encontrado"));
-    return ResponseEntity.status(HttpStatus.CREATED).body(view(d));
+    var old = store.getDeployment(cid, did).orElseThrow(() -> Http.notFound("não encontrado"));
+    var cur = deploy.snapshot(cid);
+    var snap = deploy.parseSnapshot(old).withNodesAndCertificates(cur.nodes(), cur.certificates());
+    var note = "rollback para v" + old.version() + (req != null && req.note() != null && !req.note().isBlank() ? ": " + req.note() : "");
+    return result(publish.publish(cid, note, user, req != null && Boolean.TRUE.equals(req.emergency()), snap));
   }
 
   @GetMapping("/audit")

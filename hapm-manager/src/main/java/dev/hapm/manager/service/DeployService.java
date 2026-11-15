@@ -71,11 +71,20 @@ public class DeployService {
   }
 
   public DeploymentRow create(String clusterId, String note, String user, Snapshot override) {
+    return create(clusterId, note, user, override, null, null);
+  }
+
+  public DeploymentRow create(String clusterId, String note, String user, Snapshot override, String approvedBy, Long requestId) {
     var snap = override != null ? override : snapshot(clusterId);
     int version = store.nextVersion(clusterId);
     var cfg = HaproxyRenderer.render(snap, version, Instant.now().toString()); // valida antes de gravar
-    var dep = store.createDeployment(clusterId, version, snap, cfg, note, user);
-    store.audit(user, clusterId, "deployment.create", "v" + version, note == null ? null : Map.of("note", note));
+    var dep = store.createDeployment(clusterId, version, snap, cfg, note, user, approvedBy, requestId);
+    // pedidos pendentes foram feitos sobre a versão anterior: ficam obsoletos
+    if (requestId == null) store.supersedePendingRequests(clusterId);
+    var detail = new java.util.HashMap<String, Object>();
+    if (note != null) detail.put("note", note);
+    if (approvedBy != null) detail.put("approvedBy", approvedBy);
+    store.audit(user, clusterId, "deployment.create", "v" + version, detail.isEmpty() ? null : detail);
     evaluate(clusterId);
     return store.getDeployment(clusterId, dep.id()).orElseThrow();
   }
@@ -86,6 +95,23 @@ public class DeployService {
       var cur = snapshot(clusterId);
       var snap = parseSnapshot(old).withNodesAndCertificates(cur.nodes(), cur.certificates());
       return create(clusterId, "rollback para v" + old.version(), user, snap);
+    });
+  }
+
+  /**
+   * Republica a última versão boa trocando só os certificados (renovação ACME). Não carrega edições de
+   * listeners/backends ainda não publicadas/aprovadas, por isso dispensa aprovação.
+   */
+  public Optional<DeploymentRow> refreshCertificates(String clusterId, String note, String user) {
+    return store.latestSucceeded(clusterId).map(good -> {
+      var cur = snapshot(clusterId);
+      var snap = parseSnapshot(good).withNodesAndCertificates(cur.nodes(), cur.certificates());
+      var version = store.nextVersion(clusterId);
+      var cfg = HaproxyRenderer.render(snap, version, Instant.now().toString());
+      var dep = store.createDeployment(clusterId, version, snap, cfg, note, user, null, null);
+      store.audit(user, clusterId, "deployment.cert-refresh", "v" + version, Map.of("base", "v" + good.version()));
+      evaluate(clusterId);
+      return dep;
     });
   }
 

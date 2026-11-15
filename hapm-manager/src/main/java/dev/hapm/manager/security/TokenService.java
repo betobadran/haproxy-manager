@@ -6,18 +6,29 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.json.JsonMapper;
 
-/** Token de sessão "usuario|expiração" assinado com HMAC-SHA256 (stateless: funciona com vários managers). */
+/**
+ * Token de sessão stateless (JSON assinado com HMAC-SHA256): funciona com vários managers atrás de um
+ * balanceador desde que compartilhem HAPM_SECRET. Papéis vindos do LDAP/IdP valem até o token expirar.
+ */
 @Service
 public class TokenService {
-  private static final long TTL_SEC = 12 * 3600;
-  private final byte[] secret;
+  private record Payload(String u, String n, String s, List<String> r, long e) {}
 
-  public TokenService(HapmProperties props, Store store) {
+  private final byte[] secret;
+  private final long ttlSec;
+  private final JsonMapper json;
+
+  public TokenService(HapmProperties props, Store store, JsonMapper json) {
+    this.json = json;
+    this.ttlSec = props.authOrDefault().sessionHoursOrDefault() * 3600L;
     var s = props.secret();
     if (s == null || s.isBlank()) {
       s = store.getKv("session.secret").orElseGet(() -> {
@@ -39,21 +50,25 @@ public class TokenService {
     }
   }
 
-  public String sign(String username) {
-    var body = Base64.getUrlEncoder().withoutPadding().encodeToString((username + "|" + (Instant.now().getEpochSecond() + TTL_SEC)).getBytes(StandardCharsets.UTF_8));
+  public String sign(SessionUser user) {
+    var p = new Payload(user.username(), user.displayName(), user.source(), user.roles().stream().map(Enum::name).sorted().toList(),
+        Instant.now().getEpochSecond() + ttlSec);
+    var body = Base64.getUrlEncoder().withoutPadding().encodeToString(json.writeValueAsBytes(p));
     return body + "." + hmac(body);
   }
 
-  public Optional<String> verify(String token) {
+  public Optional<SessionUser> verify(String token) {
     if (token == null) return Optional.empty();
     int dot = token.indexOf('.');
     if (dot < 0) return Optional.empty();
     var body = token.substring(0, dot);
     if (!MessageDigest.isEqual(hmac(body).getBytes(StandardCharsets.US_ASCII), token.substring(dot + 1).getBytes(StandardCharsets.US_ASCII))) return Optional.empty();
     try {
-      var parts = new String(Base64.getUrlDecoder().decode(body), StandardCharsets.UTF_8).split("\\|");
-      if (Long.parseLong(parts[1]) < Instant.now().getEpochSecond()) return Optional.empty();
-      return Optional.of(parts[0]);
+      var p = json.readValue(Base64.getUrlDecoder().decode(body), Payload.class);
+      if (p.e() < Instant.now().getEpochSecond()) return Optional.empty();
+      var roles = EnumSet.noneOf(Role.class);
+      for (var r : p.r()) Role.parse(r).ifPresent(roles::add);
+      return Optional.of(new SessionUser(p.u(), p.n(), p.s(), roles));
     } catch (Exception e) {
       return Optional.empty();
     }

@@ -59,6 +59,7 @@ public final class Normalizer {
     var k = or(s.keepalived(), new ClusterSettings.Keepalived(null, null, null, null, null, null, null, null, null, null));
     var a = or(s.aws(), new ClusterSettings.Aws(null, null, null));
     var acme = or(s.acme(), new ClusterSettings.Acme(null, null));
+    var approval = or(s.approval(), new ClusterSettings.Approval(null, null));
     var prevPass = previous != null && previous.keepalived() != null ? previous.keepalived().authPass() : null;
 
     var outName = c.name("name", name, false);
@@ -121,7 +122,8 @@ public final class Normalizer {
         mode,
         c.oneOf("settings.rollout", s.rollout(), List.of("sequential", "parallel"), "sequential"),
         c.bool(s.autoDeployOnCertRenew(), true),
-        haproxy, keepalived, aws, outAcme);
+        haproxy, keepalived, aws, outAcme,
+        new ClusterSettings.Approval(c.bool(approval.required(), false), c.bool(approval.allowSelfApproval(), false)));
     return new ClusterInput(outName, settings);
   }
 

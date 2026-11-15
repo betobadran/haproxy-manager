@@ -131,7 +131,7 @@ public class CertService {
     log.info("certificado ACME {} emitido (expira {})", cert.name(), parsed.meta().notAfter());
     if (cluster.settings().autoDeployOnCertRenew()) {
       try {
-        deploy.create(clusterId, "certificado " + cert.name() + " emitido/renovado", user == null ? "acme" : user, null);
+        deploy.refreshCertificates(clusterId, "certificado " + cert.name() + " emitido/renovado", user == null ? "acme" : user);
       } catch (Exception e) {
         log.warn("publicação automática após emissão falhou: {}", e.getMessage());
       }
