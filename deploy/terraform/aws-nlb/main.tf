@@ -17,8 +17,7 @@ data "aws_caller_identity" "current" {}
 locals {
   ami_id = var.ami_id != "" ? var.ami_id : data.aws_ssm_parameter.ubuntu.value
   tags   = merge({ "hapm:cluster" = var.cluster_label, "managed-by" = "terraform" }, var.tags)
-  s3_arns = [for u in compact([var.agent_jar_s3_uri, var.agent_scripts_s3_uri, var.otel_config_s3_uri]) :
-    "arn:aws:s3:::${replace(u, "s3://", "")}${endswith(u, "/") ? "*" : ""}"]
+  bundle_arn = "arn:aws:s3:::${replace(var.bundle_s3_uri, "s3://", "")}"
 }
 
 # ------------------------------------------------------------------ rede
@@ -80,8 +79,7 @@ resource "aws_iam_role_policy" "nodes" {
         Action   = ["ssm:GetParameter"]
         Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${trimprefix(var.join_token_ssm_parameter, "/")}"
       },
-      { Effect = "Allow", Action = ["s3:GetObject"], Resource = local.s3_arns },
-      { Effect = "Allow", Action = ["s3:ListBucket"], Resource = "arn:aws:s3:::${split("/", replace(var.agent_scripts_s3_uri, "s3://", ""))[0]}" },
+      { Effect = "Allow", Action = ["s3:GetObject"], Resource = local.bundle_arn },
     ]
   })
 }
@@ -105,11 +103,9 @@ resource "aws_launch_template" "nodes" {
   user_data = base64encode(templatefile("${path.module}/user-data.sh.tftpl", {
     manager_url           = var.manager_url
     join_token_parameter  = var.join_token_ssm_parameter
-    agent_jar_s3_uri      = var.agent_jar_s3_uri
-    agent_scripts_s3_uri  = var.agent_scripts_s3_uri
+    bundle_s3_uri         = var.bundle_s3_uri
     otel_gateway_endpoint = var.otel_gateway_endpoint
     otelcol_version       = var.otelcol_version
-    otel_config_s3_uri    = var.otel_config_s3_uri
     cluster_label         = var.cluster_label
     region                = data.aws_region.current.name
   }))

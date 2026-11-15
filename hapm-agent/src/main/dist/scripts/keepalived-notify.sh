@@ -11,6 +11,7 @@ mkdir -p "$(dirname "$STATE_FILE")"
 echo "$STATE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 logger -t hapm-keepalived "transição VRRP: $2 -> $STATE (prio ${4:-?})" 2>/dev/null || true
 
+# shellcheck source=/dev/null
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"
 [ "${HAPM_MODE:-}" = "aws-eip" ] || exit 0
 [ "$STATE" = "MASTER" ] || exit 0

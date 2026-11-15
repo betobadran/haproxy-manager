@@ -71,24 +71,13 @@ variable "join_token_ssm_parameter" {
   type        = string
 }
 
-variable "agent_jar_s3_uri" {
-  description = "s3://bucket/caminho/hapm-agent.jar (artefato do build Maven)"
-  type        = string
-}
-
-variable "agent_scripts_s3_uri" {
-  description = "s3://bucket/caminho/scripts/ (conteúdo de hapm-agent/src/main/dist/scripts)"
+variable "bundle_s3_uri" {
+  description = "s3://bucket/caminho/hapm-bundle-<versão>.tar.gz (gerado por deploy/bash/make-bundle.sh)"
   type        = string
 }
 
 variable "otel_gateway_endpoint" {
   description = "host:porta OTLP gRPC do OTel Collector gateway (vazio = não instala o collector)"
-  type        = string
-  default     = ""
-}
-
-variable "otel_config_s3_uri" {
-  description = "s3://.../node.yaml (cópia de observability/otel-collector/node.yaml)"
   type        = string
   default     = ""
 }

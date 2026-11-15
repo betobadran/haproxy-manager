@@ -1,6 +1,0 @@
-- name: Reiniciar hapm-agent
-  ansible.builtin.systemd:
-    name: hapm-agent
-    state: restarted
-    daemon_reload: true
-  when: hapm_join_token | length > 0

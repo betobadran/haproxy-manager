@@ -86,7 +86,7 @@ hapm-ui/                   React + Vite + TypeScript (frontend-maven-plugin -> M
 hapm-manager/              Spring Boot: API REST, UI, publicação, ACME, /metrics  (+ Dockerfile)
 hapm-agent/                agente Java (jar único) + scripts do keepalived + unit systemd
 observability/             OTel Collector (edge e gateway), Prometheus (+ alertas), Grafana (dashboard)
-deploy/ansible/            setup on-premise (manager, HAProxy, Keepalived, agente, OTel)
+deploy/bash/               instaladores Bash (manager e nós) + deploy via SSH + bundle
 deploy/terraform/aws-nlb/  AWS: NLB + Auto Scaling Group
 deploy/aws/                política IAM para o modo aws-eip
 lab/                       ambiente completo em Docker (2 nós com VIP real, backends, observabilidade)
@@ -126,20 +126,49 @@ docker compose -f lab/docker-compose.yml stop lb1   # failover: o VIP vai para o
 - Grafana: http://localhost:3000 (dashboard *HAPM · HAProxy alta disponibilidade*)
 - Prometheus: http://localhost:9090
 
-## On-premise (Ansible)
+## On-premise (scripts Bash)
+
+Tudo em Bash, sem dependências além de `ssh`/`tar` na sua máquina. Os instaladores são **idempotentes**: rodar de
+novo só altera e reinicia o que mudou. Rodar com o mesmo bundle não reinicia o HAProxy nem derruba conexões.
+Funcionam em **Debian/Ubuntu e RHEL/Rocky/Alma**. Se os pacotes (`haproxy`, `keepalived`, Java 21) já estiverem
+instalados ou vierem de um repositório interno, não precisam de internet.
 
 ```bash
 mvn -q -DskipTests package
-cd deploy/ansible
-# edite inventories/exemplo/hosts.yml e group_vars/all.yml (segredos via ansible-vault)
-ansible-playbook site.yml --limit hapm_manager          # 1) sobe o manager
-# 2) na UI: crie o cluster (VIPs, interface, router id), copie o token de join para vault_hapm_join_token
-ansible-playbook site.yml --limit haproxy_nodes          # 3) nós: HAProxy, Keepalived, agente, OTel
+deploy/bash/make-bundle.sh                    # -> target/hapm-bundle/ e target/hapm-bundle-<versão>.tar.gz
+
+cp deploy/bash/hosts.example.conf hosts.conf  # servidores, usuário ssh (com sudo) e caminhos dos segredos
+deploy/bash/deploy.sh -i hosts.conf manager   # 1) instala o manager
+# 2) na UI: crie o cluster (VIPs, interface, router id) e salve o token de join no JOIN_TOKEN_FILE
+deploy/bash/deploy.sh -i hosts.conf nodes     # 3) nós, um por vez (nunca os dois lados do VIP juntos)
+deploy/bash/deploy.sh -i hosts.conf nodes lb02   # atualizar só um nó
 ```
 
-O role do HAProxy aponta a unit systemd para `/etc/haproxy/hapm/current/haproxy.cfg`, habilita
-`ip_nonlocal_bind` (bind no VIP mesmo em BACKUP) e o master CLI. Firewall entre os nós: liberar **VRRP (protocolo IP 112)**.
-Os playbooks foram escritos para Debian/Ubuntu (RHEL: pacotes cobertos; a unit do HAProxy usa `/etc/sysconfig`, ajuste o drop-in).
+Sem SSH central: copie o bundle para o servidor e rode o instalador localmente:
+
+```bash
+sudo ./install-manager.sh --admin-password-file /root/admin-pass [--db-url jdbc:postgresql://... --db-user hapm --db-password-file ...] [--env-file auth.env]
+sudo ./install-node.sh --manager-url http://hapm:8080 --join-token-file /root/token --interface eth0 \
+     [--otel-gateway otel-gw:4317 --cluster-label dc1] [--vrrp-peers 10.10.0.12] [--no-keepalived]
+```
+
+O que o `install-node.sh` faz:
+- instala os pacotes `haproxy`, `keepalived`, Java 21, `curl` e `iproute2`;
+- configura os sysctls `ip_nonlocal_bind` (bind no VIP mesmo em BACKUP), `somaxconn` e afins;
+- cria um drop-in systemd que aponta o HAProxy para `/etc/haproxy/hapm/current/haproxy.cfg`, com master CLI e
+  `LimitNOFILE`; o mesmo drop-in vale para Debian e RHEL;
+- instala os scripts do keepalived, o agente com sua unit e um `agent.env` 0600, e a release bootstrap;
+- opcionalmente instala o OTel Collector (pacote baixado ou `--otelcol-package` local);
+- opcionalmente libera VRRP no firewalld;
+- verifica `:8405/healthz` e o agente.
+
+Os segredos (senha do admin, token de join) nunca vão em argumento de linha de comando: o `deploy.sh` envia pelo
+stdin do SSH para um arquivo 0600 temporário, apagado ao final.
+
+Validado em "VMs" Ubuntu 24.04 com systemd e SSH: instalação de manager + 2 nós via `deploy.sh`, VIP ativo,
+failover ao parar o HAProxy do MASTER e reexecução sem interrupção de tráfego.
+
+Firewall entre os nós: liberar **VRRP (protocolo IP 112)**.
 
 Recomendações: 2 ou 3 nós em racks/hosts físicos diferentes; `virtual_router_id` único por segmento L2;
 manager atrás de TLS (reverse proxy ou o próprio HAProxy).
@@ -150,7 +179,8 @@ manager atrás de TLS (reverse proxy ou o próprio HAProxy).
 O NLB é a entrada multi-AZ; os nós HAProxy ficam num ASG e se registram sozinhos no manager (nome = instance-id).
 Health-check do NLB em `:8405/healthz` (frontend interno `hapm_stats`), IP do cliente preservado, IMDSv2,
 acesso por SSM Session Manager, `instance_refresh` rolling. O token de join fica no SSM Parameter Store
-(SecureString) e os artefatos num bucket S3. Crie o cluster no manager com topologia **aws-nlb**.
+(SecureString). O user-data baixa do S3 o **mesmo bundle** do on-premise (`make-bundle.sh`) e roda o
+`install-node.sh --no-keepalived`. Crie o cluster no manager com topologia **aws-nlb**.
 
 ```bash
 cd deploy/terraform/aws-nlb

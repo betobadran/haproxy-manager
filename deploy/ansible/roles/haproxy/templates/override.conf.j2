@@ -1,7 +1,0 @@
-# Gerenciado pelo Ansible/HAPM: a config ativa é o symlink current -> releases/vN
-[Service]
-Environment="CONFIG=/etc/haproxy/hapm/current/haproxy.cfg"
-Environment="PIDFILE=/run/haproxy.pid"
-# master-worker com master CLI (o agente pode usar HAPM_RELOAD_MODE=master-socket)
-Environment="EXTRAOPTS=-S /run/haproxy-master.sock"
-LimitNOFILE=1048576
