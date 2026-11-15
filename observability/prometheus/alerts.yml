@@ -1,0 +1,84 @@
+groups:
+  - name: hapm-alta-disponibilidade
+    rules:
+      - alert: HAPMSemMaster
+        expr: sum by (hapm_cluster) (hapm_vrrp_is_master) == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "Cluster {{ $labels.hapm_cluster }} sem nó MASTER (VIP sem dono)"
+      - alert: HAPMSplitBrain
+        expr: sum by (hapm_cluster) (hapm_vrrp_is_master) > 1
+        for: 15s
+        labels: { severity: critical }
+        annotations:
+          summary: "Split-brain: mais de um MASTER em {{ $labels.hapm_cluster }} (verifique VRRP/unicast/firewall proto 112)"
+      - alert: HAPMKeepalivedParado
+        expr: hapm_keepalived_running == 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: "keepalived parado em {{ $labels.hapm_node }}"
+      - alert: HAPMVRRPFault
+        expr: hapm_vrrp_state{state="FAULT"} == 1
+        for: 30s
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.hapm_node }} em FAULT (check do HAProxy falhando)"
+      - alert: HAPMHaproxyDown
+        expr: hapm_haproxy_up == 0
+        for: 30s
+        labels: { severity: critical }
+        annotations:
+          summary: "HAProxy não responde em {{ $labels.hapm_node }}"
+      - alert: HAPMNoOffline
+        expr: hapm_node_online == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Agente de {{ $labels.hapm_node }} sem heartbeat no manager"
+      - alert: HAPMPublicacaoFalhou
+        expr: hapm_cluster_deployment_failed == 1
+        labels: { severity: warning }
+        annotations:
+          summary: "Última publicação do cluster {{ $labels.hapm_cluster }} falhou (nós mantidos na última versão boa)"
+      - alert: HAPMConfigDivergente
+        expr: hapm_config_applied_version != hapm_config_desired_version and hapm_config_desired_version > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.hapm_node }} não está na versão desejada há 10 min"
+  - name: hapm-trafego
+    rules:
+      - alert: HAProxyBackendSemServidores
+        expr: max by (hapm_cluster, proxy) (haproxy_backend_status{state="UP",proxy!="hapm_acme"}) == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Backend {{ $labels.proxy }} sem nenhum servidor UP"
+      - alert: HAProxyServidorDown
+        expr: max by (hapm_cluster, proxy, server) (haproxy_server_status{state="DOWN",proxy!="hapm_acme"}) == 1
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "Servidor {{ $labels.server }} do backend {{ $labels.proxy }} DOWN"
+      - alert: HAProxyTaxa5xxAlta
+        expr: |
+          sum by (hapm_cluster, proxy) (rate(haproxy_frontend_http_responses_total{code="5xx"}[5m]))
+            / clamp_min(sum by (hapm_cluster, proxy) (rate(haproxy_frontend_http_responses_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Mais de 5% de 5xx no listener {{ $labels.proxy }}"
+  - name: hapm-certificados
+    rules:
+      - alert: HAPMCertificadoExpirando
+        expr: min by (hapm_cluster, certificate) (hapm_certificate_not_after_timestamp_seconds - time()) < 14 * 86400
+        labels: { severity: warning }
+        annotations:
+          summary: "Certificado {{ $labels.certificate }} expira em {{ $value | humanizeDuration }}"
+      - alert: HAPMCertificadoExpirado
+        expr: min by (hapm_cluster, certificate) (hapm_certificate_not_after_timestamp_seconds - time()) < 0
+        labels: { severity: critical }
+        annotations:
+          summary: "Certificado {{ $labels.certificate }} EXPIRADO"

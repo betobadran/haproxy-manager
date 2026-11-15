@@ -1,0 +1,117 @@
+# Lab completo do HAPM: 2 nós HAProxy+Keepalived compartilhando o VIP 172.30.0.100,
+# 2 backends, manager, OTel Collector (edge por nó + gateway), Prometheus e Grafana.
+# Suba com ./setup.sh (cria o cluster no manager e gera o token de join).
+name: hapm-lab
+
+x-node: &node
+  build: { context: .., dockerfile: lab/node/Dockerfile }
+  image: hapm-lab-node
+  restart: unless-stopped
+  cap_add: [NET_ADMIN, NET_RAW, NET_BROADCAST]
+  sysctls:
+    net.ipv4.ip_nonlocal_bind: 1   # permite o haproxy fazer bind no VIP mesmo sendo BACKUP
+  depends_on: [manager]
+
+x-otel-edge: &otel-edge
+  image: otel/opentelemetry-collector-contrib:0.114.0
+  restart: unless-stopped
+  command: ["--config=/etc/otelcol/config.yaml"]
+  volumes: ["../observability/otel-collector/node.yaml:/etc/otelcol/config.yaml:ro"]
+
+networks:
+  hanet:
+    ipam:
+      config: [{ subnet: 172.30.0.0/24 }]
+
+volumes:
+  manager-data: {}
+  prometheus-data: {}
+
+services:
+  manager:
+    build: ../manager
+    image: hapm-manager
+    restart: unless-stopped
+    environment:
+      HAPM_ADMIN_PASSWORD: ${HAPM_ADMIN_PASSWORD:-admin12345}
+      HAPM_ACME_DIRECTORY: https://acme-staging-v02.api.letsencrypt.org/directory
+    volumes: ["manager-data:/data"]
+    ports: ["8080:8080"]
+    networks: { hanet: { ipv4_address: 172.30.0.5 } }
+
+  lb1:
+    <<: *node
+    hostname: lb1
+    environment: &node-env
+      HAPM_MANAGER_URL: http://manager:8080
+      HAPM_JOIN_TOKEN: ${HAPM_JOIN_TOKEN:?rode ./setup.sh}
+      HAPM_NODE_NAME: lb1
+      HAPM_NODE_INTERFACE: eth0
+      HAPM_POLL_INTERVAL: 3
+    networks: { hanet: { ipv4_address: 172.30.0.11 } }
+
+  lb2:
+    <<: *node
+    hostname: lb2
+    environment:
+      <<: *node-env
+      HAPM_NODE_NAME: lb2
+    networks: { hanet: { ipv4_address: 172.30.0.12 } }
+
+  app1: &app
+    image: node:22-bookworm-slim
+    command: ["node", "/srv/server.js"]
+    environment: { NAME: app1 }
+    volumes: ["./app/server.js:/srv/server.js:ro"]
+    networks: { hanet: { ipv4_address: 172.30.0.21 } }
+  app2:
+    <<: *app
+    environment: { NAME: app2 }
+    networks: { hanet: { ipv4_address: 172.30.0.22 } }
+  api1:
+    <<: *app
+    environment: { NAME: api1 }
+    networks: { hanet: { ipv4_address: 172.30.0.23 } }
+
+  # OTel Collector edge: compartilha a rede do nó e raspa 127.0.0.1:8405 / :9101
+  otel-lb1:
+    <<: *otel-edge
+    network_mode: service:lb1
+    environment: { HAPM_CLUSTER: lab, HAPM_NODE: lb1, OTEL_GATEWAY_ENDPOINT: "172.30.0.30:4317" }
+  otel-lb2:
+    <<: *otel-edge
+    network_mode: service:lb2
+    environment: { HAPM_CLUSTER: lab, HAPM_NODE: lb2, OTEL_GATEWAY_ENDPOINT: "172.30.0.30:4317" }
+
+  otel-gateway:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    environment:
+      PROMETHEUS_REMOTE_WRITE_URL: http://prometheus:9090/api/v1/write
+      HAPM_MANAGER_TARGET: manager:8080
+    volumes: ["../observability/otel-collector/gateway.yaml:/etc/otelcol/config.yaml:ro"]
+    networks: { hanet: { ipv4_address: 172.30.0.30 } }
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-remote-write-receiver", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ../observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [hanet]
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      PROMETHEUS_URL: http://prometheus:9090
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    networks: [hanet]

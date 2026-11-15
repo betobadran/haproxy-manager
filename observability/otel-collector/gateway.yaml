@@ -1,0 +1,50 @@
+# OTel Collector gateway (central): recebe OTLP dos nós, raspa o HAPM manager
+# e grava no Prometheus via remote write.
+# Variáveis: PROMETHEUS_REMOTE_WRITE_URL (ex.: http://prometheus:9090/api/v1/write), HAPM_MANAGER_TARGET (ex.: hapm-manager:8080)
+receivers:
+  otlp:
+    protocols:
+      grpc: { endpoint: 0.0.0.0:4317 }
+      http: { endpoint: 0.0.0.0:4318 }
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: hapm-manager
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["${env:HAPM_MANAGER_TARGET}"]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  # remove atributos de resource do receiver prometheus que virariam labels inúteis
+  resource/cleanup:
+    attributes:
+      - { key: server.address, action: delete }
+      - { key: server.port, action: delete }
+      - { key: url.scheme, action: delete }
+      - { key: net.host.name, action: delete }
+      - { key: net.host.port, action: delete }
+      - { key: http.scheme, action: delete }
+  batch:
+    timeout: 10s
+
+exporters:
+  prometheusremotewrite:
+    endpoint: "${env:PROMETHEUS_REMOTE_WRITE_URL}"
+    # hapm.cluster / hapm.node viram labels hapm_cluster / hapm_node
+    resource_to_telemetry_conversion:
+      enabled: true
+    target_info:
+      enabled: false
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resource/cleanup, batch]
+      exporters: [prometheusremotewrite]
