@@ -79,10 +79,12 @@ services:
   otel-lb1:
     <<: *otel-edge
     network_mode: service:lb1
+    depends_on: { lb1: { condition: service_started, restart: true } }   # reconecta se o lb1 reiniciar
     environment: { HAPM_CLUSTER: lab, HAPM_NODE: lb1, OTEL_GATEWAY_ENDPOINT: "172.30.0.30:4317" }
   otel-lb2:
     <<: *otel-edge
     network_mode: service:lb2
+    depends_on: { lb2: { condition: service_started, restart: true } }
     environment: { HAPM_CLUSTER: lab, HAPM_NODE: lb2, OTEL_GATEWAY_ENDPOINT: "172.30.0.30:4317" }
 
   otel-gateway:
@@ -112,6 +114,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       PROMETHEUS_URL: http://prometheus:9090
+      # lab: leitura sem login (somente Viewer). Não use em produção.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hapm-overview.json
     volumes:
       - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro

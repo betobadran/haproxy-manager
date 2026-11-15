@@ -50,7 +50,7 @@ const ts = (title, targets, unit = 'short', opts = {}) => ({
 
 // ------------------------------------------------------------ Alta disponibilidade
 row('Alta disponibilidade');
-panel(stat('MASTER atual (detém o VIP)', `hapm_vrrp_is_master{${FC}} == 1`, { legend: '{{hapm_node}}', textMode: 'name', colorMode: 'value',
+panel(stat('MASTER atual (detém o VIP)', `hapm_vrrp_is_master{${FC}} == 1`, { legend: '{{hapm_node}}', textMode: 'name', colorMode: 'value', target: { instant: true },
   description: 'Nó com hapm_vrrp_is_master=1. Vazio = nenhum MASTER (VIP sem dono).' }), 6, 4);
 panel(stat('Qtde de MASTERs', `sum(hapm_vrrp_is_master{${FC}}) or vector(0)`, {
   thresholds: steps(['red', null], ['green', 1], ['red', 2]), description: '1 = saudável; 0 = sem VIP; >1 = split-brain' }), 3, 4);

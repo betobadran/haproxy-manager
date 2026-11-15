@@ -23,7 +23,7 @@ hapm:
   secret: ${HAPM_SECRET:}
   acme-directory: ${HAPM_ACME_DIRECTORY:acme://letsencrypt.org}
   haproxy-bin: ${HAPM_HAPROXY_BIN:haproxy}
-  node-offline-after-sec: 30
+  node-offline-after-sec: ${HAPM_NODE_OFFLINE_AFTER:15}
   deployment-timeout-sec: 600
   cert-renew-before-days: 30
 
