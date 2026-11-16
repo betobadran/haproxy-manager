@@ -74,6 +74,10 @@ class AuthorizationTest {
     assertThat(otto.call("GET", "/api/users", null).status()).isEqualTo(403);
     // APPROVER sem OPERATOR não edita
     assertThat(ana.call("POST", "/api/clusters/" + cid + "/frontends", frontend(81)).status()).isEqualTo(403);
+    // listener e backend não podem ter o mesmo nome (viram seções do haproxy.cfg)
+    var dup = admin.call("POST", "/api/clusters/" + cid + "/frontends", Map.of("name", "app", "binds", List.of(Map.of("address", "*", "port", 82)), "defaultBackend", "app"));
+    assertThat(dup.status()).isEqualTo(409);
+    assertThat(dup.text()).contains("backend");
     // sem token
     assertThat(new ApiClient(port).call("GET", "/api/clusters", null).status()).isEqualTo(401);
   }

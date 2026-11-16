@@ -95,10 +95,19 @@ public class ObjectService {
     };
   }
 
+  /** Listener e backend viram seções do haproxy.cfg com o mesmo espaço de nomes: o nome não pode se repetir entre eles. */
+  private void checkCrossName(String clusterId, Kind k, String name) {
+    var otherKind = k == Kind.frontends ? Kind.backends : k == Kind.backends ? Kind.frontends : null;
+    if (otherKind != null && store.getObjectByName(clusterId, otherKind.kind, name).isPresent()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "já existe um " + (otherKind == Kind.frontends ? "listener" : "backend") + " chamado \"" + name + "\"; use outro nome");
+    }
+  }
+
   public ObjectRow create(String clusterId, Kind k, Map<String, Object> body, String user) {
     var data = normalize(k, body, null);
     var name = nameOf(data);
     if (store.getObjectByName(clusterId, k.kind, name).isPresent()) throw new ResponseStatusException(HttpStatus.CONFLICT, k.kind + " \"" + name + "\" já existe");
+    checkCrossName(clusterId, k, name);
     var row = store.createObject(clusterId, k.kind, name, data);
     store.audit(user, clusterId, k.kind + ".create", name, null);
     if (data instanceof Certificate c && "acme".equals(c.source()) && !c.usable()) certs.issue(clusterId, row.id(), user);
@@ -111,6 +120,7 @@ public class ObjectService {
     var name = nameOf(data);
     var other = store.getObjectByName(clusterId, k.kind, name);
     if (other.isPresent() && !other.get().id().equals(id)) throw new ResponseStatusException(HttpStatus.CONFLICT, k.kind + " \"" + name + "\" já existe");
+    checkCrossName(clusterId, k, name);
     var row = store.updateObject(clusterId, k.kind, id, name, data);
     store.audit(user, clusterId, k.kind + ".update", name, null);
     return row;

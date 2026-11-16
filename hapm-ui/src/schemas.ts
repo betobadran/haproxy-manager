@@ -2,15 +2,17 @@ import type { Opt, Row } from './form';
 
 const backendOptions = (ctx: any): Opt[] => [['', '— nenhum —'], ...(ctx.backends ?? []).map((b: any): Opt => [b.name, `${b.name} (${b.mode})`])];
 
+const http = (v: any) => v.mode !== 'tcp';
+
 export const frontendSchema: Row[] = [
   [{ key: 'name', label: 'Nome' }, { key: 'mode', label: 'Modo', type: 'select', options: ['http', 'tcp'], default: 'http' }, { key: 'enabled', label: 'Ativo', type: 'checkbox', default: true }],
   { key: 'description', label: 'Descrição' },
   { key: 'binds', label: 'Binds (endereço/porta)', type: 'list', addLabel: 'bind', default: () => [{ address: '*', port: 80 }], newItem: () => ({ address: '*' }),
     fields: [[{ key: 'address', label: 'Endereço (* = todos)', default: '*' }, { key: 'port', label: 'Porta', type: 'number' }, { key: 'ssl', label: 'TLS/SSL', type: 'checkbox' }]] },
   { key: 'defaultBackend', label: 'Backend padrão', type: 'select', options: backendOptions },
-  [{ key: 'redirectToHttps', label: 'Redirecionar HTTP→HTTPS', type: 'checkbox' }, { key: 'hsts', label: 'HSTS', type: 'checkbox' },
-    { key: 'http2', label: 'HTTP/2', type: 'checkbox', default: true }, { key: 'forwardFor', label: 'X-Forwarded-For', type: 'checkbox', default: true },
-    { key: 'acme', label: "Responder ACME (Let's Encrypt)", type: 'checkbox', default: true }],
+  [{ key: 'redirectToHttps', label: 'Redirecionar HTTP→HTTPS', type: 'checkbox', showIf: http }, { key: 'hsts', label: 'HSTS', type: 'checkbox', showIf: http },
+    { key: 'http2', label: 'HTTP/2', type: 'checkbox', default: true, showIf: http }, { key: 'forwardFor', label: 'X-Forwarded-For', type: 'checkbox', default: true, showIf: http },
+    { key: 'acme', label: "Responder ACME (Let's Encrypt)", type: 'checkbox', default: true, showIf: http }],
   { key: 'allowCidrs', label: 'Permitir somente estas origens (IPs/CIDRs; vazio = todas)', type: 'tokens', placeholder: '10.0.0.0/8 192.168.0.0/16' },
   { key: 'rateLimit', label: 'Rate limit por IP', type: 'group', fields: [[
     { key: 'enabled', label: 'Ativar', type: 'checkbox' }, { key: 'requests', label: 'Máx. requisições', type: 'number', default: 100 }, { key: 'period', label: 'Janela', default: '10s' }]] },
