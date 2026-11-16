@@ -62,6 +62,12 @@ backend padrão, redirecionar HTTP→HTTPS, HSTS, HTTP/2, allowlist de IPs, rate
 Em **Regras** (avaliadas em ordem): condições (host, caminho, método, IP, header, SNI; todas com AND, com opção NÃO) →
 ação (encaminhar para backend, redirecionar, negar, definir/remover header).
 
+Exemplos: listener HTTP com regras (`telas/listener-http.png`) e listener TCP para PostgreSQL (`telas/listener-tcp.png`):
+
+![Listener HTTP](telas/listener-http.png)
+![Listener TCP](telas/listener-tcp.png)
+![Backend TCP](telas/backend-tcp.png)
+
 ## 7. Publicar
 
 **Publicar** mostra a configuração gerada, o **diff** contra a versão em produção e o resultado do `haproxy -c`.
@@ -74,6 +80,8 @@ Clique em **Publicar** (com uma nota). O que acontece:
 
 Com **aprovação obrigatória**, o botão cria um *pedido*; um APPROVER (que não seja quem pediu) aprova em **Aprovações**,
 e só então a publicação ocorre. ADMIN pode fazer publicação emergencial (auditada).
+
+![Publicar: haproxy.cfg e keepalived.conf gerados](telas/publicar.png)
 
 **Histórico** guarda todas as versões, com diff e **rollback** em um clique.
 
