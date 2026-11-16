@@ -70,6 +70,8 @@ public class SecurityConfig {
             .requestMatchers("/api/auth/**").permitAll()
             .requestMatchers("/api/me", "/api/me/**").authenticated()
             .requestMatchers("/api/users", "/api/users/**").hasAuthority(A)
+            .requestMatchers(HttpMethod.POST, "/api/notifications/*/ack").hasAuthority(V)
+            .requestMatchers("/api/notifications/settings", "/api/notifications/test/*", "/api/notifications/check").hasAuthority(A)
             // clusters, tokens e nós (estrutura): ADMIN
             .requestMatchers(HttpMethod.POST, "/api/clusters").hasAuthority(A)
             .requestMatchers(HttpMethod.PUT, "/api/clusters/*").hasAuthority(A)

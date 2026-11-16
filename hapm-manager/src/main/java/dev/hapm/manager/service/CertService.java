@@ -36,10 +36,12 @@ public class CertService {
   private final HapmProperties props;
   private final DeployService deploy;
   private final PemService pem;
+  private final NotificationService notifications;
   private final Set<String> running = ConcurrentHashMap.newKeySet();
   private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-  public CertService(Store store, HapmProperties props, DeployService deploy, PemService pem) {
+  public CertService(Store store, HapmProperties props, DeployService deploy, PemService pem, NotificationService notifications) {
+    this.notifications = notifications;
     this.store = store;
     this.props = props;
     this.deploy = deploy;
@@ -58,6 +60,12 @@ public class CertService {
         log.error("falha ACME no certificado {}", certId, e);
         setStatus(clusterId, certId, "error", e.getMessage());
         store.audit(user, clusterId, "certificate.acme.error", certId, Map.of("error", String.valueOf(e.getMessage())));
+        try {
+          notifications.notify("critical", "acme-failed", clusterId, "Falha ao emitir/renovar certificado " + certId,
+              String.valueOf(e.getMessage()), Map.of("certificate", certId), null);
+        } catch (Exception ne) {
+          log.warn("falha ao notificar erro ACME: {}", ne.getMessage());
+        }
       } finally {
         running.remove(key);
       }

@@ -5,6 +5,7 @@ import { backendSchema, clusterSchema, frontendSchema } from '../schemas';
 import { Badge, daysLeft, useAction, useLoad, useToast } from '../ui';
 import { usePerm } from '../session';
 import { useFmt, useT, useTs } from '../prefs';
+import { ClusterAlerts } from './Alerts';
 import { MetricsTab } from './Metrics';
 
 const TABS: [string, string][] = [
@@ -99,6 +100,7 @@ function Overview({ cluster }: { cluster: any }) {
 
   return (
     <>
+      <ClusterAlerts cid={cluster.id} />
       <div className="grid" style={{ marginBottom: 16 }}>
         <div className="stat"><div className="k">{t('Nós online')}</div><div className="v">{online.length}/{nodes.length}</div></div>
         {keep && (

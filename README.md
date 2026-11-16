@@ -14,6 +14,10 @@ Stack: **Java 21 + Maven**, Spring Boot 4.1 no manager, agente em Java puro (jar
 UI em **React** compilada durante o build Maven e servida pelo próprio jar. Node/npm são usados **somente no build**
 da UI (baixados pelo `frontend-maven-plugin`); nada de Node roda em produção.
 
+**Documentação:** [primeiros passos (criar e configurar um cluster pela tela, failover automático)](docs/primeiros-passos.md) ·
+[alertas de certificado](docs/alertas.md) · [banco de dados (SQLite / PostgreSQL)](docs/banco-de-dados.md) ·
+[login corporativo e aprovações](docs/autenticacao.md) · [failover de IP na AWS](docs/aws-failover.md)
+
 ---
 
 ## Arquitetura
@@ -22,7 +26,7 @@ da UI (baixados pelo `frontend-maven-plugin`); nada de Node roda em produção.
 flowchart LR
   subgraph cp[Control plane]
     UI[UI React] --> M[hapm-manager<br/>Spring Boot]
-    M --- DB[(H2 / PostgreSQL)]
+    M --- DB[(SQLite / PostgreSQL)]
   end
   subgraph n1[Nó 1]
     A1[hapm-agent] -->|valida, troca release,<br/>reload sem queda| H1[HAProxy]
@@ -66,6 +70,9 @@ recebe a versão desejada.
   persistente por cookie, TLS até os servidores, compressão, resolução DNS em runtime.
 - **Certificados:** upload de PEM (valida par chave/certificado, extrai domínios e validade) ou **ACME/Let's Encrypt
   HTTP-01** com renovação automática (30 dias antes) e publicação automática após renovar.
+- **Alertas de expiração de certificado** (30/14/7/1 dia, configurável) e de falha ACME: na **tela** (contador na barra
+  lateral e banner no cluster, com reconhecimento), por **e-mail** (SMTP), **Microsoft Teams** (Workflows) e **webhook**
+  assinado com HMAC. Detalhes em [docs/alertas.md](docs/alertas.md).
 - **Nós:** auto-registro, prioridade VRRP (automática ou manual), estado MASTER/BACKUP, versão aplicada, erros.
 - **Auditoria** de todas as ações; histórico de versões com diff e rollback.
 - **Vários clusters num só manager:** cada cluster tem topologia própria (on-prem/keepalived, AWS NLB, AWS EIP),
@@ -271,6 +278,7 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 | GET/POST/PUT/DELETE | `/api/users[/{username}]` | usuários locais (ADMIN) |
 | POST | `/api/clusters/{id}/deployments/{did}/rollback` | nova versão com a config antiga |
 | GET | `/api/audit` | auditoria |
+| GET/POST/PUT | `/api/notifications[/count\|/{id}/ack\|/settings\|/test/{canal}\|/check]` | alertas e canais ([docs/alertas.md](docs/alertas.md)) |
 | — | `/agent/v1/heartbeat`, `/agent/v1/bundle/{v}` | uso dos agentes (token de join) |
 | GET | `/metrics`, `/actuator/health` | Prometheus / health |
 

@@ -67,6 +67,11 @@
       <artifactId>sqlite-jdbc</artifactId>
       <scope>runtime</scope>
     </dependency>
+    <!-- alertas por e-mail (SMTP configurado pela tela) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.shredzone.acme4j</groupId>
       <artifactId>acme4j-client</artifactId>
@@ -80,6 +85,13 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- servidor SMTP em memória para testar os alertas por e-mail -->
+    <dependency>
+      <groupId>com.icegreen</groupId>
+      <artifactId>greenmail-junit5</artifactId>
+      <version>2.1.15</version>
       <scope>test</scope>
     </dependency>
     <!-- servidor LDAP em memória e provedor OIDC falso para testes reais de login -->

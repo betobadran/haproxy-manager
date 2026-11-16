@@ -381,6 +381,45 @@ public class Store {
     jdbc.sql("UPDATE publish_requests SET status = 'superseded', decided_at = ? WHERE cluster_id = ? AND status = 'pending'").params(now(), clusterId).update();
   }
 
+  // ------------------------------------------------------------------ notificações (alertas)
+  public record NotificationRow(long id, String ts, String level, String kind, String clusterId, String title, String message, String data,
+                                String deliveries, String acknowledgedAt, String acknowledgedBy) {}
+
+  private NotificationRow notification(ResultSet rs, int i) throws SQLException {
+    return new NotificationRow(rs.getLong("id"), rs.getString("ts"), rs.getString("level"), rs.getString("kind"), rs.getString("cluster_id"),
+        rs.getString("title"), rs.getString("message"), rs.getString("data"), rs.getString("deliveries"), rs.getString("acknowledged_at"),
+        rs.getString("acknowledged_by"));
+  }
+
+  /** Cria a notificação se a chave de deduplicação ainda não existe. Vazio = já notificado antes. */
+  @Transactional
+  public Optional<NotificationRow> createNotification(String level, String kind, String clusterId, String title, String message, String data, String dedupeKey) {
+    if (dedupeKey != null && jdbc.sql("SELECT COUNT(*) FROM notifications WHERE dedupe_key = ?").param(dedupeKey).query(Long.class).single() > 0) return Optional.empty();
+    jdbc.sql("INSERT INTO notifications(ts, level, kind, cluster_id, title, message, data, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .params(now(), level, kind, clusterId, title, message, data, dedupeKey).update();
+    return jdbc.sql("SELECT * FROM notifications ORDER BY id DESC LIMIT 1").query(this::notification).optional();
+  }
+
+  public void setDeliveries(long id, String deliveriesJson) {
+    jdbc.sql("UPDATE notifications SET deliveries = ? WHERE id = ?").params(deliveriesJson, id).update();
+  }
+
+  public List<NotificationRow> listNotifications(boolean unackedOnly, String clusterId, int limit) {
+    var sql = "SELECT * FROM notifications WHERE 1 = 1" + (unackedOnly ? " AND acknowledged_at IS NULL" : "") + (clusterId != null ? " AND cluster_id = ?" : "")
+        + " ORDER BY id DESC LIMIT ?";
+    var q = jdbc.sql(sql);
+    if (clusterId != null) q = q.param(clusterId);
+    return q.param(limit).query(this::notification).list();
+  }
+
+  public long countUnacked() {
+    return jdbc.sql("SELECT COUNT(*) FROM notifications WHERE acknowledged_at IS NULL").query(Long.class).single();
+  }
+
+  public boolean acknowledge(long id, String user) {
+    return jdbc.sql("UPDATE notifications SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ? AND acknowledged_at IS NULL").params(now(), user, id).update() == 1;
+  }
+
   // ------------------------------------------------------------------ ACME
   public void putChallenge(String token, String keyAuth) {
     deleteChallenge(token);

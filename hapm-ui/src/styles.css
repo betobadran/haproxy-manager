@@ -56,7 +56,7 @@ fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12
 fieldset legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .item { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px 2px; margin-bottom: 10px; position: relative; }
 .item > .rm { position: absolute; top: 6px; right: 6px; }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+.badge { display: inline-block; white-space: nowrap; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
 .b-ok { color: var(--ok); } .b-warn { color: var(--warn); } .b-err { color: var(--err); } .b-muted { color: var(--muted); } .b-acc { color: var(--accent); }
 .muted { color: var(--muted); } .err { color: var(--err); white-space: pre-wrap; }
 .diff div { white-space: pre; font-family: ui-monospace, monospace; font-size: 12.5px; padding: 0 6px; }
@@ -129,3 +129,10 @@ a.btn.primary { background: var(--accent); border-color: var(--accent); color: v
 @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
 .checks { margin: 6px 0; padding-left: 18px; font-size: 12.5px; }
 .checks li { margin: 2px 0; }
+
+/* alertas */
+.side a .count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--err); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
+.banner { border: 1px solid currentColor; border-left-width: 4px; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; background: var(--panel); }
+.banner ul { margin: 6px 0; padding-left: 18px; color: var(--text); }
+.banner-err { color: var(--err); } .banner-warn { color: var(--warn); }
+tr.muted td { opacity: .7; }

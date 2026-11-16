@@ -8,6 +8,7 @@ import { Home } from './pages/Home';
 import { ClusterPage } from './pages/Cluster';
 import { Audit, Account } from './pages/System';
 import { Users } from './pages/Users';
+import { Alerts, NotifySettings, useUnacked } from './pages/Alerts';
 
 function useHash() {
   const [hash, setHash] = useState(location.hash);
@@ -24,6 +25,7 @@ function Layout({ active, children }: { active: string; children: ReactNode }) {
   const { data: clusters } = useLoad<any[]>(() => api('GET', '/clusters'), [active], 15000);
   const { me, isAdmin } = usePerm();
   const t = useT();
+  const unacked = useUnacked();
   const logout = () => {
     auth.set(null);
     location.hash = '#/login';
@@ -39,6 +41,10 @@ function Layout({ active, children }: { active: string; children: ReactNode }) {
           <a key={c.id} href={`#/c/${c.id}`} className={active === c.id ? 'active' : ''}>{c.name}</a>
         ))}
         <div className="section">{t('Sistema')}</div>
+        <a href="#/alerts" className={active === 'alerts' ? 'active' : ''}>
+          {t('Alertas')}{unacked > 0 && <span className="count" aria-label={t('{n} alerta(s) pendente(s)', { n: unacked })}>{unacked}</span>}
+        </a>
+        {isAdmin && <a href="#/notifications" className={active === 'notifications' ? 'active' : ''}>{t('Canais de notificação')}</a>}
         <a href="#/audit" className={active === 'audit' ? 'active' : ''}>{t('Auditoria')}</a>
         {isAdmin && <a href="#/users" className={active === 'users' ? 'active' : ''}>{t('Usuários')}</a>}
         <a href="#/account" className={active === 'account' ? 'active' : ''}>{t('Conta')}</a>
@@ -90,6 +96,12 @@ export function App() {
   if (parts[0] === 'c' && parts[1]) {
     active = parts[1];
     page = <ClusterPage key={parts[1]} cid={parts[1]} tab={parts[2] ?? ''} sub={parts[3]} />;
+  } else if (parts[0] === 'alerts') {
+    active = 'alerts';
+    page = <Alerts />;
+  } else if (parts[0] === 'notifications') {
+    active = 'notifications';
+    page = <NotifySettings />;
   } else if (parts[0] === 'audit') {
     active = 'audit';
     page = <Audit />;
