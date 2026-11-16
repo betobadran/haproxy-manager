@@ -496,4 +496,8 @@ export const EN: Record<string, string> = {
   "{n} novo(s) alerta(s)": "{n} new alert(s)",
   "URL do webhook (Workflows)": "Webhook URL (Workflows)",
   "Segredo HMAC (opcional)": "HMAC secret (optional)",
+  "{n} servidor(es) DOWN": "{n} server(s) DOWN",
+  "TCP não mede tempo de resposta HTTP": "TCP does not measure HTTP response time",
+  "Falhas do check para perder o VIP": "Check failures to give up the VIP",
+  "Sucessos do check para voltar a disputar": "Check successes to rejoin the election",
 };

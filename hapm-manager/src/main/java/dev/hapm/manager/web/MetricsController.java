@@ -1,10 +1,12 @@
 package dev.hapm.manager.web;
 
+import dev.hapm.core.model.Backend;
 import dev.hapm.core.model.Frontend;
 import dev.hapm.manager.service.DeployService;
 import dev.hapm.manager.service.MetricsService;
 import dev.hapm.manager.store.Store;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +30,10 @@ public class MetricsController {
     store.getCluster(cid).orElseThrow(() -> Http.notFound("cluster não encontrado"));
     var modes = new HashMap<String, String>();
     for (var f : store.listObjects(cid, DeployService.FRONTEND, Frontend.class)) modes.put(f.name(), f.mode());
-    return metrics.view(cid, Math.max(1, Math.min(minutes, 60)), node, modes);
+    var out = new LinkedHashMap<>(metrics.view(cid, Math.max(1, Math.min(minutes, 60)), node, modes));
+    var beModes = new HashMap<String, String>();
+    for (var b : store.listObjects(cid, DeployService.BACKEND, Backend.class)) beModes.put(b.name(), b.mode());
+    out.put("backendModes", beModes);
+    return out;
   }
 }

@@ -73,6 +73,7 @@ export const clusterSchema: Row[] = [
     { key: 'keepalived', label: 'Keepalived / VRRP', type: 'group', showIf: (v) => v.mode !== 'aws-nlb', fields: [
       [{ key: 'vips', label: 'VIPs (CIDR)', type: 'tokens', placeholder: '192.168.10.100/24' }, { key: 'interface', label: 'Interface', default: 'eth0' }, { key: 'routerId', label: 'virtual_router_id', type: 'number', default: 51 }],
       [{ key: 'authPass', label: 'Senha VRRP (≤8, vazio = gerar)' }, { key: 'advertInt', label: 'advert_int (s)', type: 'number', default: 1 }, { key: 'checkInterval', label: 'Intervalo do check (s)', type: 'number', default: 2 }],
+      [{ key: 'checkFall', label: 'Falhas do check para perder o VIP', type: 'number', default: 2 }, { key: 'checkRise', label: 'Sucessos do check para voltar a disputar', type: 'number', default: 2 }],
       [{ key: 'unicast', label: 'Unicast (recomendado)', type: 'checkbox', default: true }, { key: 'preempt', label: 'Preempção (volta ao nó de maior prioridade)', type: 'checkbox', default: true }]] },
     { key: 'aws', label: 'AWS: failover de IP entre ENIs', type: 'group', showIf: (v) => v.mode === 'aws-eip', fields: [
       { key: 'region', label: 'Região', placeholder: 'sa-east-1' },

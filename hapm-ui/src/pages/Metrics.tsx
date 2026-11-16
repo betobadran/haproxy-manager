@@ -43,7 +43,11 @@ export function MetricsTab({ cluster }: { cluster: any }) {
   if (!m) return error ? <p className="err">{error}</p> : <p className="muted">{t('carregando...')}</p>;
   const c = m.current;
   const errLevel = c.errorRatePct >= 5 ? 'crit' : c.errorRatePct >= 1 ? 'warn' : 'good';
+  const nodeStatesOf = (states: Record<string, string>) => Object.keys(states ?? {}).filter((n) => !node || n === node);
   const beLevel = c.backendsTotal === 0 ? 'good' : c.backendsUp === c.backendsTotal ? 'good' : c.backendsUp === 0 ? 'crit' : 'warn';
+  // servidores DOWN em algum nó (o backend pode seguir UP com os demais)
+  const serversDown = (m.servers as any[]).filter((s) => nodeStatesOf(s.states).some((n) => s.states[n] && s.states[n] !== 'UP')).length;
+  const beTile = beLevel !== 'good' ? beLevel : serversDown > 0 ? 'warn' : 'good';
   const nodeStates = (states: Record<string, string>) => m.nodes.filter((n: any) => !node || n.name === node).map((n: any) => n.name);
   const stLevel = (s?: string) => (s === 'UP' ? 'good' : s === 'MAINT' || s === 'DRAIN' || s === 'NOLB' ? 'warn' : 'crit');
 
@@ -70,7 +74,7 @@ export function MetricsTab({ cluster }: { cluster: any }) {
           <Status level={errLevel} label={errLevel === 'good' ? t('normal') : errLevel === 'warn' ? t('atenção') : t('crítico')} /></div>
         <div className="stat"><div className="k">{t('Sessões ativas')}</div><div className="hero">{fmtNum(c.sessions)}</div></div>
         <div className="stat"><div className="k">{t('Backends saudáveis')}</div><div className="hero">{c.backendsUp}/{c.backendsTotal}</div>
-          <Status level={beLevel} label={beLevel === 'good' ? t('todos UP') : beLevel === 'warn' ? t('parcial') : t('indisponível')} /></div>
+          <Status level={beTile} label={beLevel === 'crit' ? t('indisponível') : beLevel === 'warn' ? t('parcial') : serversDown > 0 ? t('{n} servidor(es) DOWN', { n: serversDown }) : t('todos UP')} /></div>
       </div>
 
       <div className="charts">
@@ -95,7 +99,7 @@ export function MetricsTab({ cluster }: { cluster: any }) {
                     <td><b>{b.name}</b></td>
                     <td><Status level={level} label={level === 'good' ? 'UP' : level === 'crit' ? 'DOWN' : t('UP em {up} de {n} nós', { up: b.nodesUp, n: b.nodes })} /></td>
                     <td>{b.active}</td><td>{b.backup}</td>
-                    <td>{fmtNum(b.responseTimeMs)} ms</td><td>{fmtNum(b.queue)}</td><td>{fmtNum(b.sessions)}</td>
+                    <td>{m.backendModes?.[b.name] === 'tcp' ? <span className="muted" title={t('TCP não mede tempo de resposta HTTP')}>—</span> : `${fmtNum(b.responseTimeMs)} ms`}</td><td>{fmtNum(b.queue)}</td><td>{fmtNum(b.sessions)}</td>
                   </tr>
                 );
               })}
