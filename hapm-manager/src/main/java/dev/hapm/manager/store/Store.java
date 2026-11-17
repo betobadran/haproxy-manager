@@ -239,6 +239,15 @@ public class Store {
     return getNode(id).orElseThrow();
   }
 
+  /** Hash (SHA-256) da credencial própria do nó; null = nó sem credencial (agente antigo). */
+  public Optional<String> getNodeTokenHash(String id) {
+    return jdbc.sql("SELECT token_hash FROM nodes WHERE id = ?").param(id).query((rs, i) -> rs.getString(1)).optional().filter(java.util.Objects::nonNull);
+  }
+
+  public void setNodeTokenHash(String id, String hash) {
+    jdbc.sql("UPDATE nodes SET token_hash = ? WHERE id = ?").params(hash, id).update();
+  }
+
   public void deleteNode(String id) {
     jdbc.sql("DELETE FROM nodes WHERE id = ?").param(id).update();
   }

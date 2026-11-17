@@ -34,6 +34,8 @@ public class AgentController {
   private final dev.hapm.manager.service.MetricsService metrics;
   private final dev.hapm.manager.service.OpsMonitor ops;
   private final dev.hapm.manager.service.ServerOpsService serverOps;
+  @org.springframework.beans.factory.annotation.Autowired private dev.hapm.manager.service.SigningKeys signing;
+  private static final java.security.SecureRandom RNG = new java.security.SecureRandom();
 
   public AgentController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics, dev.hapm.manager.service.OpsMonitor ops,
                          dev.hapm.manager.service.ServerOpsService serverOps) {
@@ -59,8 +61,29 @@ public class AgentController {
     return s == null ? null : s.length() > max ? s.substring(0, max) : s;
   }
 
+  static String sha256(String s) {
+    try {
+      return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /**
+   * Credencial própria do nó: depois que o nó recebe uma, só quem a apresenta fala por ele (o token de join, que é
+   * do cluster, deixa de bastar para se passar por um nó existente). Agentes antigos (sem o cabeçalho) seguem só com o join.
+   */
+  private void checkNodeToken(String nodeId, String nodeName, String presented) {
+    var hash = store.getNodeTokenHash(nodeId);
+    if (hash.isEmpty()) return;
+    if (presented == null || presented.equals("request") || !TokenService.constantTimeEquals(hash.get(), sha256(presented))) {
+      throw Http.status(HttpStatus.UNAUTHORIZED, "credencial do nó " + nodeName + " inválida: se o agente perdeu o estado, remova o nó no manager para registrá-lo de novo");
+    }
+  }
+
   @PostMapping("/heartbeat")
-  public HeartbeatResponse heartbeat(@RequestHeader(value = "Authorization", required = false) String authz, @RequestBody Heartbeat b) {
+  public HeartbeatResponse heartbeat(@RequestHeader(value = "Authorization", required = false) String authz,
+                                     @RequestHeader(value = AgentProtocol.NODE_TOKEN_HEADER, required = false) String nodeToken, @RequestBody Heartbeat b) {
     var cluster = auth(authz);
     if (b.name() == null || !Checks.NAME.matcher(b.name()).matches()) throw Http.status(HttpStatus.BAD_REQUEST, "nome de nó inválido");
     if (b.address() != null && !Checks.isIp(b.address())) throw Http.status(HttpStatus.BAD_REQUEST, "endereço inválido");
@@ -70,6 +93,10 @@ public class AgentController {
         b.appliedVersion() == null ? 0 : b.appliedVersion(),
         la == null ? null : new LastApply(la.version(), Boolean.TRUE.equals(la.ok()), cut(la.error(), 4000), cut(la.at(), 40)));
     var before = store.getNodeByName(cluster.id(), hb.name());
+    before.ifPresent(n -> checkNodeToken(n.id(), n.name(), nodeToken));
+    if (before.isEmpty() && cluster.settings().nodes() != null && !cluster.settings().nodes().joinAllowed() && !Boolean.TRUE.equals(b.leaving())) {
+      throw Http.status(HttpStatus.FORBIDDEN, "registro de nós novos fechado neste cluster (Configurações › Nós)");
+    }
     if (Boolean.TRUE.equals(b.leaving())) {
       // scale-in (AWS): a instância está sendo encerrada; remove o nó e não registra de novo
       before.ifPresent(n -> ops.onNodeLeft(cluster, n, "instância encerrada pelo Auto Scaling (lifecycle hook)"));
@@ -83,16 +110,29 @@ public class AgentController {
     var rt = b.runtime();
     serverOps.report(cluster.id(), node.name(), rt == null ? null
         : new AgentProtocol.RuntimeReport(rt.ok(), cut(rt.error(), 2000), cut(rt.at(), 40), rt.commands()));
-    return new HeartbeatResponse(deploy.desiredFor(cluster.id(), store.getNode(node.id()).orElseThrow()), 5, serverOps.runtimeFor(cluster));
+    // primeira credencial do nó: entregue uma única vez, guardada só como hash
+    String issued = null;
+    if ("request".equals(nodeToken) && store.getNodeTokenHash(node.id()).isEmpty()) {
+      var raw = new byte[32];
+      RNG.nextBytes(raw);
+      issued = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
+      store.setNodeTokenHash(node.id(), sha256(issued));
+      store.audit(null, cluster.id(), "node.credential.issued", node.name(), null);
+    }
+    return new HeartbeatResponse(deploy.desiredFor(cluster.id(), store.getNode(node.id()).orElseThrow()), 5, serverOps.runtimeFor(cluster), issued,
+        signing.publicKey());
   }
 
   @GetMapping("/bundle/{version}")
   public Bundle bundle(@RequestHeader(value = "Authorization", required = false) String authz,
-                       @RequestHeader(value = AgentProtocol.NODE_HEADER, required = false) String nodeName, @PathVariable int version) {
+                       @RequestHeader(value = AgentProtocol.NODE_HEADER, required = false) String nodeName,
+                       @RequestHeader(value = AgentProtocol.NODE_TOKEN_HEADER, required = false) String nodeToken, @PathVariable int version) {
     var cluster = auth(authz);
     var node = store.getNodeByName(cluster.id(), nodeName == null ? "" : nodeName)
         .orElseThrow(() -> Http.notFound("nó desconhecido; envie heartbeat primeiro"));
+    checkNodeToken(node.id(), node.name(), nodeToken);
     var dep = store.getDeploymentByVersion(cluster.id(), version).orElseThrow(() -> Http.notFound("versão não encontrada"));
-    return BundleBuilder.build(deploy.parseSnapshot(dep), dep.haproxyCfg(), dep.version(), new NodeInfo(node.name(), node.address(), node.settings()));
+    // assinado (Ed25519): o agente só aplica o que o manager assinou, mesmo que alguém se ponha no meio do caminho
+    return signing.sign(BundleBuilder.build(deploy.parseSnapshot(dep), dep.haproxyCfg(), dep.version(), new NodeInfo(node.name(), node.address(), node.settings())));
   }
 }

@@ -21,6 +21,7 @@ Opções:
   --interface IF             interface do VRRP/VIP (padrão: rota padrão)
   --address IP               IP do nó para o VRRP unicast (padrão: IPv4 da interface)
   --no-keepalived            não instala o keepalived (topologia aws-nlb)
+  --manager-key CHAVE        chave pública de assinatura do manager (tela: Adicionar nós); sem ela, é fixada no 1º contato
   --aws-lifecycle            AWS Auto Scaling: no scale-in o agente avisa o manager, que remove o nó
   --asg-hook NOME:ASG        (com --aws-lifecycle) conclui o lifecycle hook NOME do ASG ao sair, sem esperar o timeout
   --vrrp-peers IP,IP         libera VRRP (protocolo 112) desses IPs no firewalld, se ativo
@@ -34,7 +35,7 @@ Opções:
 USAGE
 }
 
-AWS_LIFECYCLE=0 ASG_HOOK='' MANAGER_URL='' TOKEN_FILE='' NODE_NAME='' IFACE='' ADDRESS='' KEEPALIVED=1 VRRP_PEERS='' OTEL_GW='' CLUSTER_LABEL=hapm
+MANAGER_KEY='' AWS_LIFECYCLE=0 ASG_HOOK='' MANAGER_URL='' TOKEN_FILE='' NODE_NAME='' IFACE='' ADDRESS='' KEEPALIVED=1 VRRP_PEERS='' OTEL_GW='' CLUSTER_LABEL=hapm
 OTEL_PKG='' OTEL_VERSION=0.114.0 START=1
 while (($#)); do
   case $1 in
@@ -45,6 +46,7 @@ while (($#)); do
     --address) ADDRESS=$2; shift 2 ;;
     --no-keepalived) KEEPALIVED=0; shift ;;
     --aws-lifecycle) AWS_LIFECYCLE=1; shift ;;
+    --manager-key) MANAGER_KEY=$2; shift 2 ;;
     --asg-hook) ASG_HOOK=$2; shift 2 ;;
     --vrrp-peers) VRRP_PEERS=$2; shift 2 ;;
     --otel-gateway) OTEL_GW=$2; shift 2 ;;
@@ -133,6 +135,10 @@ copy_if_changed "$B/systemd/hapm-agent.service" /etc/systemd/system/hapm-agent.s
   echo 'HAPM_KEEPALIVED_RELOAD_COMMAND=systemctl reload-or-restart keepalived'
   echo 'HAPM_METRICS_HOST=127.0.0.1'
   echo 'HAPM_METRICS_PORT=9101'
+  if [[ -n $MANAGER_KEY ]]; then
+    [[ $MANAGER_KEY =~ ^[A-Za-z0-9+/=]{40,200}$ ]] || die "--manager-key inválida"
+    echo "HAPM_MANAGER_SIGNING_KEY=$MANAGER_KEY"
+  fi
   if ((AWS_LIFECYCLE)); then
     echo 'HAPM_AWS_LIFECYCLE=1'
     if [[ -n $ASG_HOOK ]]; then

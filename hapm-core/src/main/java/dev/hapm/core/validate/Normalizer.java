@@ -172,7 +172,7 @@ public final class Normalizer {
         haproxy, keepalived, aws, outAcme,
         new ClusterSettings.Approval(c.bool(approval.required(), false), c.bool(approval.allowSelfApproval(), false)),
         new ClusterSettings.Nodes(nodesIn.autoRemoveOfflineMinutes() == null || nodesIn.autoRemoveOfflineMinutes() == 0 ? null
-            : c.integer("nodes.autoRemoveOfflineMinutes", nodesIn.autoRemoveOfflineMinutes(), 5, 10080, null)),
+            : c.integer("nodes.autoRemoveOfflineMinutes", nodesIn.autoRemoveOfflineMinutes(), 5, 10080, null), c.bool(nodesIn.allowJoin(), true)),
         logs(c, logsIn),
         awsAccess(c, or(s.awsAccess(), new ClusterSettings.AwsAccess(null, null, null, null)), aws.region()));
     c.done();

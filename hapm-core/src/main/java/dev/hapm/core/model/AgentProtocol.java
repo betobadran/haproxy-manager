@@ -59,9 +59,20 @@ public final class AgentProtocol {
     }
   }
 
-  public record HeartbeatResponse(Desired desired, Integer pollIntervalSec, Runtime runtime) {
+  /**
+   * nodeToken: credencial própria do nó, entregue UMA vez (no primeiro heartbeat que a pede); o agente guarda e envia
+   * em {@link #NODE_TOKEN_HEADER}. signingKey: chave pública Ed25519 com que o manager assina os bundles.
+   */
+  public record HeartbeatResponse(Desired desired, Integer pollIntervalSec, Runtime runtime, String nodeToken, String signingKey) {
     public HeartbeatResponse(Desired desired, Integer pollIntervalSec) {
-      this(desired, pollIntervalSec, null);
+      this(desired, pollIntervalSec, null, null, null);
+    }
+
+    public HeartbeatResponse(Desired desired, Integer pollIntervalSec, Runtime runtime) {
+      this(desired, pollIntervalSec, runtime, null, null);
     }
   }
+
+  /** Cabeçalho com a credencial do nó; "request" pede uma credencial nova (nó sem credencial ainda). */
+  public static final String NODE_TOKEN_HEADER = "X-HAPM-Node-Token";
 }

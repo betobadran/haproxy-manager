@@ -18,7 +18,8 @@ da UI (baixados pelo `frontend-maven-plugin`); nada de Node roda em produção.
 [alertas de certificado](docs/alertas.md) · [banco de dados (SQLite / PostgreSQL)](docs/banco-de-dados.md) ·
 [login corporativo e aprovações](docs/autenticacao.md) · [failover de IP na AWS](docs/aws-failover.md) ·
 [operação do dia a dia (linha do tempo, drenar servidores, exportar/importar, scale-in)](docs/operacao.md) ·
-[logs de acesso (Loki/SIEM)](docs/logs.md)
+[logs de acesso (Loki/SIEM)](docs/logs.md) · [AWS: credenciais e certificados ACM](docs/aws-acesso.md) ·
+[control plane x data plane](docs/control-plane-data-plane.md)
 
 ---
 
@@ -70,8 +71,14 @@ recebe a versão desejada.
   negar, definir/remover header.
 - **Backends:** servidores (peso, backup, maxconn, desativar), balanceamento, health-check HTTP/TCP, sessão
   persistente por cookie, TLS até os servidores, compressão, resolução DNS em runtime.
-- **Certificados:** upload de PEM (valida par chave/certificado, extrai domínios e validade) ou **ACME/Let's Encrypt
-  HTTP-01** com renovação automática (30 dias antes) e publicação automática após renovar.
+- **Certificados:** upload de PEM (valida par chave/certificado, extrai domínios e validade), **ACME/Let's Encrypt
+  HTTP-01** com renovação automática, ou **AWS Certificate Manager** (públicos exportáveis, inclusive wildcard, com
+  validação DNS automática no Route 53 e reexportação a cada renovação do ACM); publicação automática após renovar.
+- **Acesso à AWS sem chaves:** o manager usa a role da máquina (EC2/ECS/IRSA/SSO) ou assume uma role por cluster
+  (outra conta, com ExternalId, sessão `hapm-<usuário>` no CloudTrail). Ver [docs/aws-acesso.md](docs/aws-acesso.md).
+- **Separação control plane / data plane:** porta exclusiva para os agentes, credencial própria por nó, registro de
+  nós que pode ser fechado e configurações **assinadas (Ed25519)** que o nó confere antes de aplicar.
+  Ver [docs/control-plane-data-plane.md](docs/control-plane-data-plane.md).
 - **Alertas** na **tela** (contador na barra lateral e banner no cluster, com reconhecimento), por **e-mail** (SMTP),
   **Microsoft Teams** (Workflows) e **webhook** assinado com HMAC: expiração de certificado (30/14/7/1 dia) e falha ACME,
   **failover** (VIP mudou de nó), **nó offline**/voltou, **split-brain**/sem MASTER, **publicação com falha** e
@@ -261,7 +268,7 @@ Métricas próprias: `hapm_vrrp_is_master`, `hapm_vrrp_state{state}`, `hapm_keep
 
 **Manager** (variáveis de ambiente): `HAPM_PORT` (8080), `HAPM_DATA_DIR`, `HAPM_ADMIN_USER`/`HAPM_ADMIN_PASSWORD`
 (senha aleatória no log se vazio), `HAPM_SECRET` (assinatura das sessões; defina o mesmo em todos os managers),
-`HAPM_LOKI_URL` (+ `HAPM_LOKI_TENANT`, `HAPM_LOKI_TOKEN`) para a busca de logs, `HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
+`HAPM_LOKI_URL` (+ `HAPM_LOKI_TENANT`, `HAPM_LOKI_TOKEN`) para a busca de logs, `HAPM_AGENT_PORT` (porta exclusiva dos agentes), `HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
 (`acme://letsencrypt.org`; staging: `acme://letsencrypt.org/staging`), `HAPM_HAPROXY_BIN`, `HAPM_NODE_OFFLINE_AFTER` (15 s).
 
 **Agente**: ver `hapm-agent/src/main/dist/systemd/agent.env.example` — `HAPM_MANAGER_URL`, `HAPM_JOIN_TOKEN`,
@@ -299,6 +306,9 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 | GET | `/api/clusters/{id}/export?format=yaml&secrets=false` | exportar (ADMIN) |
 | POST | `/api/clusters/import`, `/api/clusters/{id}/import?mode=merge\|replace`, `/api/clusters/{id}/import-haproxy` | importar (ADMIN; `dryRun=true` simula) |
 | GET | `/api/clusters/{id}/logs?status=5xx&frontend=...` | busca de logs de acesso no Loki (OPERATOR) |
+| POST | `/api/clusters/{id}/aws/test` | testa o acesso do manager à AWS (ADMIN) |
+| POST | `/api/clusters/{id}/certificates` `{"source":"acm","aws":{"domains":[...]}}` | certificado do ACM (pedido ou ARN existente) |
+| GET | `/api/system/signing-key` | chave pública de assinatura dos bundles e porta dos agentes |
 | GET/POST/PUT | `/api/notifications[/count\|/{id}/ack\|/settings\|/test/{canal}\|/check]` | alertas e canais ([docs/alertas.md](docs/alertas.md)) |
 | — | `/agent/v1/heartbeat`, `/agent/v1/bundle/{v}` | uso dos agentes (token de join) |
 | GET | `/metrics`, `/actuator/health` | Prometheus / health |
@@ -306,7 +316,8 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 ## Limitações conhecidas e próximos passos
 - Papéis são globais (valem para todos os clusters); papéis **por cluster/equipe** são o próximo passo natural.
 - Chaves privadas dos certificados ficam no banco do manager (proteja o volume/banco; criptografia em repouso com KMS/Vault está no roadmap).
-- ACME apenas HTTP-01 (sem wildcard); DNS-01 (Route 53 etc.) no roadmap.
+- Let's Encrypt apenas HTTP-01 (sem wildcard); para wildcard use certificados do ACM (validação DNS).
+- Sem mTLS entre agente e manager (use TLS num proxy na frente); rotação da chave de assinatura é manual.
 - Destinos SIEM direto do HAProxy são só syslog **UDP**; para TCP/TLS use o gateway OTel (`gateway-siem.yaml`).
 - O conversor de `haproxy.cfg` não traduz condições com OU (`||`) nem `userlist`/`errorfile`: ficam no bloco avançado
   ou nos avisos.

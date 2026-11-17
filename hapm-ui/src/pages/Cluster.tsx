@@ -72,8 +72,11 @@ function Overview({ cluster }: { cluster: any }) {
   const run = useAction();
   const toast = useToast();
   const { canEdit, isAdmin } = usePerm();
+  const { data: key } = useLoad<any>(() => api('GET', '/system/signing-key'), []);
   if (!data) return <Loading />;
   const [nodes, deps] = data;
+  // com porta exclusiva dos agentes, o nó aponta para ela (mesmo host da interface)
+  const agentUrl = key && Number(key.agentPort) > 0 ? `${location.protocol}//${location.hostname}:${key.agentPort}` : location.origin;
   const online = nodes.filter((n) => n.online);
   const masters = online.filter((n) => n.vrrpState === 'MASTER');
   const keep = cluster.settings.mode !== 'aws-nlb';
@@ -169,7 +172,11 @@ function Overview({ cluster }: { cluster: any }) {
                       ) : <span className="muted">{t('aguardando preflight')}</span>}
                     </td>
                   )}
-                  <td className="muted">{n.haproxyVersion || '—'}</td>
+                  <td className="muted">{n.haproxyVersion || '—'}
+                    {n.hasCredential
+                      ? <span className="badge b-ok" style={{ marginLeft: 6 }} title={t('O nó autentica com credencial própria (o token de join sozinho não se passa por ele).')}>🔒</span>
+                      : <span className="badge b-warn" style={{ marginLeft: 6 }} title={t('Agente antigo: autentica só com o token de join do cluster. Atualize o agente.')}>{t('sem credencial')}</span>}
+                  </td>
                   <td>{isAdmin && <button className="small danger" onClick={del(n)}>{t('remover')}</button>}</td>
                 </tr>
               ))}
@@ -181,7 +188,8 @@ function Overview({ cluster }: { cluster: any }) {
       {isAdmin && <details className="panel" open={!nodes.length}>
         <summary><b>{t('Adicionar nós (instalar o agente)')}</b></summary>
         <p>{t('Com o bundle de instalação (deploy/bash), em cada servidor:')}</p>
-        <pre>{`HAPM_JOIN_TOKEN='${cluster.joinToken}' \\\n  sudo -E ./install-node.sh --manager-url ${location.origin} --interface ${cluster.settings.keepalived?.interface ?? 'eth0'}${cluster.settings.mode === 'aws-nlb' ? ' --no-keepalived' : ''}`}</pre>
+        <pre>{`HAPM_JOIN_TOKEN='${cluster.joinToken}' \\\n  sudo -E ./install-node.sh --manager-url ${agentUrl} --interface ${cluster.settings.keepalived?.interface ?? 'eth0'}${cluster.settings.mode === 'aws-nlb' ? ' --no-keepalived' : ''}${key ? ` \\\n    --manager-key ${key.publicKey}` : ''}`}</pre>
+        {key && <p className="muted">{t('Chave de assinatura do manager: {fp}. O agente só aplica configurações assinadas por ela.', { fp: key.fingerprint })}</p>}
         <p className="muted">{t('Ou use deploy/bash/deploy.sh para instalar em vários servidores via SSH. O agente se registra sozinho no primeiro heartbeat. Trate o token como segredo (pode ser rotacionado em Configurações).')}</p>
       </details>}
     </>

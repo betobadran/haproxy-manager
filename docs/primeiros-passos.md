@@ -53,6 +53,10 @@ Aba **Certificados**:
 - **Emitir com Let's Encrypt (HTTP-01)**: informe os domínios e clique em **Emitir** (o listener na porta 80 precisa ter *Responder ACME* marcado). A renovação é automática 30 dias antes do vencimento
   e, se marcado no cluster, publicada automaticamente.
 
+- **AWS Certificate Manager (ACM)**: certificado público exportável (inclusive wildcard), validado por DNS — o HAPM
+  cria os registros no Route 53, exporta quando emitido e reexporta a cada renovação. Requer o "Acesso do manager à
+  AWS" em Configurações; ver [aws-acesso.md](aws-acesso.md).
+
 Certificados perto de vencer geram **alertas** (tela, e-mail, Teams, webhook) — ver [alertas.md](alertas.md).
 
 ## 6. Listeners (frontends) e regras

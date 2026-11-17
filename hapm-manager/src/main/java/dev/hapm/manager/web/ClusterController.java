@@ -166,6 +166,7 @@ public class ClusterController {
       m.put("lastApply", n.lastApply());
       m.put("createdAt", n.createdAt());
       m.put("online", deploy.isOnline(n));
+      m.put("hasCredential", store.getNodeTokenHash(n.id()).isPresent());
       m.put("priority", c.settings().usesKeepalived() ? KeepalivedRenderer.priority(infos, new NodeInfo(n.name(), n.address(), n.settings())) : null);
       m.put("desired", deploy.desiredFor(cid, n));
       m.put("aws", metrics.awsCheck(cid, n.name()));

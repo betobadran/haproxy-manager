@@ -121,8 +121,20 @@ public record ClusterSettings(
    */
   public record Approval(Boolean required, Boolean allowSelfApproval) {}
 
-  /** Ciclo de vida dos nós. autoRemoveOfflineMinutes: remove do cluster nós sem heartbeat há N minutos (null/0 = nunca). */
-  public record Nodes(Integer autoRemoveOfflineMinutes) {}
+  /**
+   * Ciclo de vida dos nós. autoRemoveOfflineMinutes: remove do cluster nós sem heartbeat há N minutos (null/0 = nunca);
+   * allowJoin: aceita registro de nós novos com o token de join (padrão true).
+   */
+  public record Nodes(Integer autoRemoveOfflineMinutes, Boolean allowJoin) {
+    public Nodes(Integer autoRemoveOfflineMinutes) {
+      this(autoRemoveOfflineMinutes, null);
+    }
+
+    /** false = registro de nós novos fechado (o token de join deixa de valer para nomes desconhecidos). */
+    public boolean joinAllowed() {
+      return !Boolean.FALSE.equals(allowJoin);
+    }
+  }
 
   /**
    * Logs de acesso estruturados (logfmt) via syslog RFC 5424.

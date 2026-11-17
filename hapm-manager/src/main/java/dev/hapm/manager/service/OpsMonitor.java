@@ -80,7 +80,7 @@ public class OpsMonitor {
       var ops = notifications.ops();
       var subject = "node:" + now.name();
       if (before.isEmpty()) {
-        event(c.id(), now.name(), subject, "node-joined", "nó registrado (" + (now.address() == null ? "?" : now.address()) + ")", null);
+        event(c.id(), now.name(), subject, "node-joined", now.address() == null ? "nó registrado" : "nó registrado (" + now.address() + ")", null);
       } else if ("node-offline".equals(last(c.id(), subject))) {
         var b = before.get();
         var away = b.lastSeen() == null ? 0 : System.currentTimeMillis() - b.lastSeen();

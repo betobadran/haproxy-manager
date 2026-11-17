@@ -98,6 +98,8 @@ export const clusterSchema: Row[] = [
       [{ key: 'collector', label: 'OTel Collector do nó (UDP host:porta)', placeholder: '127.0.0.1:5514', default: '127.0.0.1:5514' },
         { key: 'siem', label: 'Destinos syslog adicionais (SIEM, UDP host:porta)', type: 'tokens', placeholder: 'siem.exemplo.interno:514' }]] },
     { key: 'nodes', label: 'Nós', type: 'group', fields: [[
+      { key: 'allowJoin', label: 'Aceitar registro de nós novos com o token de join', type: 'checkbox', default: true,
+        help: 'Desligue depois de registrar os nós: o token de join deixa de valer para nomes novos. Nós existentes usam a credencial própria que receberam no registro.' },
       { key: 'autoRemoveOfflineMinutes', label: 'Remover automaticamente nós offline há mais de (min; vazio = nunca)', type: 'number',
         help: 'Útil com Auto Scaling na AWS (o lifecycle hook já remove na hora; isto cobre instâncias que sumiram sem avisar). Mínimo 5.' }]] },
     { key: 'acme', label: "ACME / Let's Encrypt", type: 'group', fields: [[{ key: 'email', label: 'E-mail' },

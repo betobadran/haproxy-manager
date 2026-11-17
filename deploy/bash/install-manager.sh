@@ -15,6 +15,7 @@ usage() {
   cat <<'USAGE'
 Opções:
   --port PORTA               porta HTTP (padrão: 8080)
+  --agent-port PORTA         porta exclusiva dos agentes (data plane); a interface deixa de atender os agentes
   --admin-password-file ARQ  senha do admin inicial (ou HAPM_ADMIN_PASSWORD); sem ela, uma senha aleatória vai para o log
   --secret-file ARQ          segredo de sessão (ou HAPM_SECRET); obrigatório e igual em todos os managers de um cluster de managers
   --with-postgres            instala o PostgreSQL neste servidor, cria usuário/banco "hapm" (senha aleatória) e usa-o
@@ -29,10 +30,11 @@ Opções:
 USAGE
 }
 
-PORT=8080 ADMIN_FILE='' SECRET_FILE='' DB_URL='' DB_USER='' DB_PASS_FILE='' EXTRA_ENV='' WITH_HAPROXY=1 START=1 WITH_PG=0
+AGENT_PORT=0 PORT=8080 ADMIN_FILE='' SECRET_FILE='' DB_URL='' DB_USER='' DB_PASS_FILE='' EXTRA_ENV='' WITH_HAPROXY=1 START=1 WITH_PG=0
 while (($#)); do
   case $1 in
     --port) PORT=$2; shift 2 ;;
+    --agent-port) AGENT_PORT=$2; shift 2 ;;
     --admin-password-file) ADMIN_FILE=$2; shift 2 ;;
     --secret-file) SECRET_FILE=$2; shift 2 ;;
     --with-postgres) WITH_PG=1; shift ;;
@@ -51,6 +53,7 @@ done
 require_root
 ((WITH_PG)) && [[ -n $DB_URL ]] && die "use --with-postgres OU --db-url, não os dois"
 if ! [[ $PORT =~ ^[0-9]+$ ]] || ((PORT < 1 || PORT > 65535)); then die "--port inválida"; fi
+if ! [[ $AGENT_PORT =~ ^[0-9]+$ ]] || ((AGENT_PORT > 65535)) || ((AGENT_PORT == PORT)); then die "--agent-port inválida (diferente de --port)"; fi
 B=$HAPM_BUNDLE_DIR
 [[ -f $B/hapm-manager.jar ]] || die "bundle sem hapm-manager.jar (gere com make-bundle.sh)"
 
@@ -113,6 +116,7 @@ setup_postgres() {
 ENV=/etc/hapm-manager/manager.env
 [[ -f $ENV ]] || { install -m 0600 -o hapm -g hapm /dev/null "$ENV"; echo '# Gerenciado pelo install-manager.sh do HAPM' > "$ENV"; }
 set_env_var "$ENV" HAPM_PORT "$PORT" && changed=1
+set_env_var "$ENV" HAPM_AGENT_PORT "$AGENT_PORT" && changed=1
 set_env_var "$ENV" HAPM_DATA_DIR /var/lib/hapm-manager && changed=1
 v=$(read_secret "$ADMIN_FILE" HAPM_ADMIN_PASSWORD); [[ -n $v ]] && set_env_var "$ENV" HAPM_ADMIN_PASSWORD "$v" && changed=1
 v=$(read_secret "$SECRET_FILE" HAPM_SECRET); [[ -n $v ]] && set_env_var "$ENV" HAPM_SECRET "$v" && changed=1

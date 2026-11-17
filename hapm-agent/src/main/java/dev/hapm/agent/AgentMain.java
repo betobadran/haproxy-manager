@@ -77,6 +77,7 @@ public class AgentMain {
     Files.createDirectories(cfg.haproxyDir());
     applier.ensureBootstrap();
     loadState();
+    loadCredentials();
     haproxyVersion = sys.haproxyVersion(cfg.haproxyBin());
     Log.info("agente " + cfg.version() + " nó=" + cfg.nodeName() + " endereço=" + cfg.nodeAddress() + " manager=" + cfg.managerUrl() + " haproxy=" + haproxyVersion);
     var server = startMetricsServer();
@@ -126,12 +127,91 @@ public class AgentMain {
     }
   }
 
+  // ------------------------------------------------------------------ credencial do nó e chave do manager
+  private volatile String nodeToken;
+  /** chave pública Ed25519 do manager fixada neste nó (HAPM_MANAGER_SIGNING_KEY ou a do primeiro contato) */
+  private volatile java.security.PublicKey managerKey;
+  private volatile String managerKeyB64;
+  private volatile boolean keyMismatch;
+
+  private java.nio.file.Path secretFile(String name) {
+    return cfg.stateDir().resolve(name);
+  }
+
+  private static void writeSecret(java.nio.file.Path f, String v) throws IOException {
+    Files.createDirectories(f.getParent());
+    var tmp = f.resolveSibling(f.getFileName() + ".tmp");
+    Files.writeString(tmp, v);
+    try {
+      Files.setPosixFilePermissions(tmp, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+    } catch (UnsupportedOperationException ignored) {
+      // sistema sem POSIX
+    }
+    Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+  }
+
+  void loadCredentials() {
+    try {
+      var t = secretFile("node.token");
+      if (Files.exists(t)) nodeToken = Files.readString(t).strip();
+      var env = System.getenv("HAPM_MANAGER_SIGNING_KEY");
+      var k = env != null && !env.isBlank() ? env.strip() : Files.exists(secretFile("manager-signing.pub")) ? Files.readString(secretFile("manager-signing.pub")).strip() : null;
+      if (k != null) {
+        managerKey = dev.hapm.core.security.Signatures.decodePublic(k);
+        managerKeyB64 = k;
+      }
+    } catch (Exception e) {
+      Log.warn("credenciais locais ilegíveis: " + e.getMessage());
+    }
+  }
+
+  /** Guarda a credencial do nó (entregue uma vez) e fixa a chave do manager no primeiro contato. */
+  void onCredentials(String issuedToken, String signingKey) {
+    try {
+      if (issuedToken != null && !issuedToken.isBlank() && nodeToken == null) {
+        writeSecret(secretFile("node.token"), issuedToken);
+        nodeToken = issuedToken;
+        Log.info("credencial própria do nó recebida e guardada em " + secretFile("node.token"));
+      }
+      if (signingKey != null && !signingKey.isBlank()) {
+        if (managerKey == null) {
+          managerKey = dev.hapm.core.security.Signatures.decodePublic(signingKey);
+          managerKeyB64 = signingKey.strip();
+          writeSecret(secretFile("manager-signing.pub"), managerKeyB64);
+          Log.info("chave de assinatura do manager fixada: " + dev.hapm.core.security.Signatures.fingerprint(managerKeyB64)
+              + " (confira com a tela do manager; para fixar já na instalação use --manager-key)");
+        } else if (!managerKeyB64.equals(signingKey.strip())) {
+          if (!keyMismatch) Log.error("a chave de assinatura anunciada pelo manager (" + dev.hapm.core.security.Signatures.fingerprint(signingKey)
+              + ") difere da fixada neste nó (" + dev.hapm.core.security.Signatures.fingerprint(managerKeyB64) + "): nenhuma versão nova será aplicada");
+          keyMismatch = true;
+        } else {
+          keyMismatch = false;
+        }
+      }
+    } catch (Exception e) {
+      Log.warn("credenciais do manager: " + e.getMessage());
+    }
+  }
+
+  /** Só aplica bundles assinados pela chave fixada (se houver chave fixada). */
+  void checkSignature(Bundle bundle) {
+    if (managerKey == null) {
+      Log.warn("bundle v" + bundle.version() + " sem verificação de assinatura: nenhuma chave do manager fixada neste nó");
+      return;
+    }
+    if (!dev.hapm.core.security.Signatures.verify(managerKey, bundle)) {
+      throw new IllegalStateException("assinatura do bundle v" + bundle.version() + " inválida ou ausente (chave fixada "
+          + dev.hapm.core.security.Signatures.fingerprint(managerKeyB64) + "): não aplicado");
+    }
+  }
+
   // ------------------------------------------------------------------ comunicação com o manager
   private String call(String method, String path, String body) throws IOException, InterruptedException {
     var req = HttpRequest.newBuilder(URI.create(cfg.managerUrl() + path))
         .timeout(Duration.ofSeconds(15))
         .header("Authorization", "Bearer " + cfg.joinToken())
         .header("X-HAPM-Node", cfg.nodeName())
+        .header(dev.hapm.core.model.AgentProtocol.NODE_TOKEN_HEADER, nodeToken != null ? nodeToken : "request")
         .header("Content-Type", "application/json")
         .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body))
         .build();
@@ -182,6 +262,7 @@ public class AgentMain {
           traffic.collect(), awsCheck, runtimeReport, leaving ? Boolean.TRUE : null);
       res = JSON.readValue(call("POST", "/agent/v1/heartbeat", JSON.writeValueAsString(hb)), HeartbeatResponse.class);
       heartbeatOk = true;
+      onCredentials(res.nodeToken(), res.signingKey());
       if (leaving) {
         left = true;
         Log.info("manager removeu o nó; heartbeats encerrados");
@@ -212,6 +293,8 @@ public class AgentMain {
     Log.info("aplicando v" + d.version() + " (atual v" + applied + ")");
     try {
       var bundle = JSON.readValue(call("GET", "/agent/v1/bundle/" + d.version(), null), Bundle.class);
+      if (keyMismatch) throw new IllegalStateException("chave de assinatura do manager diferente da fixada neste nó: atualização recusada");
+      checkSignature(bundle);
       state = new State(state.lastApply(), bundle.keepalived() != null, state.applySuccess(), state.applyFailure());
       var r = applier.apply(bundle);
       state = new State(new LastApply(d.version(), true, null, Instant.now().toString()), state.usesKeepalived(), state.applySuccess() + 1, state.applyFailure());

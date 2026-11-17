@@ -11,7 +11,20 @@ import java.util.TreeMap;
  * O que o agente baixa e aplica: arquivos da release do HAProxy (haproxy.cfg, certs.list, certs/*.pem)
  * e, quando o cluster usa VRRP, os arquivos do keepalived.
  */
-public record Bundle(Integer version, String cluster, Map<String, String> files, Map<String, String> keepalived, String sha256) {
+public record Bundle(Integer version, String cluster, Map<String, String> files, Map<String, String> keepalived, String sha256, String signature) {
+
+  public Bundle(Integer version, String cluster, Map<String, String> files, Map<String, String> keepalived, String sha256) {
+    this(version, cluster, files, keepalived, sha256, null);
+  }
+
+  public Bundle withSignature(String sig) {
+    return new Bundle(version, cluster, files, keepalived, sha256, sig);
+  }
+
+  /** O que é assinado (Ed25519) pelo manager: versão, cluster e o hash canônico do conteúdo. */
+  public byte[] signingPayload() {
+    return ("hapm-bundle-v1\n" + cluster + "\n" + version + "\n" + digest(version, files, keepalived)).getBytes(StandardCharsets.UTF_8);
+  }
 
   /** Hash canônico (independente da ordem do JSON) usado para checar integridade no agente. */
   public static String digest(int version, Map<String, String> files, Map<String, String> keepalived) {

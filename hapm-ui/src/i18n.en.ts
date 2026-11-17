@@ -616,4 +616,10 @@ export const EN: Record<string, string> = {
   "registros de validação (Route 53)": "validation records (Route 53)",
   "verificar no ACM": "check in ACM",
   "aguardando validação DNS": "waiting for DNS validation",
+  "Aceitar registro de nós novos com o token de join": "Accept new node registration with the join token",
+  "Agente antigo: autentica só com o token de join do cluster. Atualize o agente.": "Old agent: authenticates only with the cluster join token. Update the agent.",
+  "Chave de assinatura do manager: {fp}. O agente só aplica configurações assinadas por ela.": "Manager signing key: {fp}. The agent only applies configurations signed with it.",
+  "Desligue depois de registrar os nós: o token de join deixa de valer para nomes novos. Nós existentes usam a credencial própria que receberam no registro.": "Turn off after registering the nodes: the join token stops working for new names. Existing nodes use the credential they received at registration.",
+  "O nó autentica com credencial própria (o token de join sozinho não se passa por ele).": "The node authenticates with its own credential (the join token alone cannot impersonate it).",
+  "sem credencial": "no credential",
 };

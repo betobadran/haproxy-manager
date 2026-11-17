@@ -28,6 +28,8 @@ hapm:
   acme-directory: ${HAPM_ACME_DIRECTORY:acme://letsencrypt.org}
   haproxy-bin: ${HAPM_HAPROXY_BIN:haproxy}
   node-offline-after-sec: ${HAPM_NODE_OFFLINE_AFTER:15}
+  # porta exclusiva dos agentes (data plane): só /agent/**, desafio ACME e health; 0 = mesma porta da interface
+  agent-port: ${HAPM_AGENT_PORT:0}
   deployment-timeout-sec: 600
   cert-renew-before-days: 30
   # busca de logs de acesso na tela (Loki 3.x; os logs chegam via OTel Collector). Vazio = tela de logs desabilitada.

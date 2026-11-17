@@ -54,7 +54,7 @@ class OpsMonitorTest {
     Traffic t = web2 == null ? null : new Traffic(System.currentTimeMillis(), 0.0, List.of(),
         List.of(new BackendStat("web", true, "DOWN".equals(web2) ? 1 : 2, 0, 0, 0, 0, 0, 0)),
         List.of(new ServerStat("web", "web1", "UP"), new ServerStat("web", "web2", web2)));
-    agent.heartbeat(token, new Heartbeat(name, null, "t", null, state, applied, last, t, null));
+    agent.heartbeat(token, null, new Heartbeat(name, null, "t", null, state, applied, last, t, null));
   }
 
   List<String> kinds() {
@@ -126,9 +126,9 @@ class OpsMonitorTest {
     hb("lb1", "BACKUP");
     hb("lb2", "BACKUP");
     // AWS scale-in: o agente avisa que está saindo -> nó removido e não volta a ser registrado
-    agent.heartbeat(token, new Heartbeat("lb2", null, "t", null, "BACKUP", 0, null, null, null, null, true));
+    agent.heartbeat(token, null, new Heartbeat("lb2", null, "t", null, "BACKUP", 0, null, null, null, null, true));
     assertThat(store.getNodeByName(cid, "lb2")).isEmpty();
-    agent.heartbeat(token, new Heartbeat("lb2", null, "t", null, "BACKUP", 0, null, null, null, null, true));
+    agent.heartbeat(token, null, new Heartbeat("lb2", null, "t", null, "BACKUP", 0, null, null, null, null, true));
     assertThat(store.getNodeByName(cid, "lb2")).isEmpty();
     assertThat(events()).contains("node-left");
     assertThat(kinds()).contains("node-left");

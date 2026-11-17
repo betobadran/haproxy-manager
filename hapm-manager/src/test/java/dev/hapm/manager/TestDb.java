@@ -35,5 +35,8 @@ public final class TestDb {
     r.add("spring.datasource.url", () -> pg.replaceAll("/[^/?]*(\\?.*)?$", "/" + db));
     r.add("spring.datasource.username", () -> user);
     r.add("spring.datasource.password", () -> pass);
+    // cada classe de teste mantém o próprio contexto em cache: pool pequeno para não estourar max_connections
+    r.add("spring.datasource.hikari.maximum-pool-size", () -> "3");
+    r.add("spring.datasource.hikari.minimum-idle", () -> "0");
   }
 }

@@ -179,6 +179,10 @@ class EndToEndTest {
     assertThat(d1.status()).as(d1.text()).isEqualTo(201);
     var d1Id = d1.body().get("id").asLong();
     waitFor(() -> "succeeded".equals(depStatus(cid, d1Id)), 30_000, () -> "v1 aplicada: " + nodes(cid));
+    // o agente recebeu credencial própria e fixou a chave do manager; a v1 só foi aplicada porque a assinatura confere
+    assertThat(cfg.stateDir().resolve("node.token")).exists();
+    assertThat(Files.readString(cfg.stateDir().resolve("manager-signing.pub")).strip())
+        .isEqualTo(call("GET", "/api/system/signing-key", null).body().get("publicKey").asString());
     var r1 = get("http://127.0.0.1:" + fePort + "/ok");
     assertThat(r1.statusCode()).isEqualTo(200);
     assertThat(r1.body()).contains("ola de /ok");
