@@ -14,16 +14,22 @@ public record ClusterSettings(
     Aws aws,
     Acme acme,
     Approval approval,
-    Nodes nodes) {
+    Nodes nodes,
+    Logs logs) {
 
   /** Compatibilidade: configurações sem política de aprovação explícita. */
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null, null, null);
   }
 
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
                          Approval approval) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, null, null);
+  }
+
+  public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
+                         Approval approval, Nodes nodes) {
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, nodes, null);
   }
 
   public boolean approvalRequired() {
@@ -96,4 +102,16 @@ public record ClusterSettings(
 
   /** Ciclo de vida dos nós. autoRemoveOfflineMinutes: remove do cluster nós sem heartbeat há N minutos (null/0 = nunca). */
   public record Nodes(Integer autoRemoveOfflineMinutes) {}
+
+  /**
+   * Logs de acesso estruturados (logfmt) via syslog RFC 5424.
+   * collector: OTel Collector local do nó (host:porta UDP, padrão 127.0.0.1:5514) que encaminha para Loki/SIEM;
+   * siem: destinos syslog UDP adicionais (host:porta), enviados direto pelo HAProxy; userAgent: inclui o User-Agent.
+   */
+  public record Logs(Boolean enabled, String collector, @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> siem,
+                     Boolean userAgent) {
+    public boolean on() {
+      return Boolean.TRUE.equals(enabled);
+    }
+  }
 }

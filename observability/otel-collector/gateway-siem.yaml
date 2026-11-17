@@ -1,0 +1,37 @@
+# Sobreposição do gateway para enviar os logs de acesso TAMBÉM a um SIEM (além do Loki).
+#   otelcol-contrib --config gateway.yaml --config gateway-siem.yaml
+# Escolha os exportadores na lista "exporters" do pipeline de logs no fim do arquivo (listas substituem, não somam).
+#
+# Alternativa sem OTel: em Configurações do cluster › Logs de acesso › "Destinos syslog (SIEM)", o próprio HAProxy
+# envia uma cópia em syslog RFC 5424 direto ao SIEM.
+exporters:
+  # Syslog RFC 5424 (QRadar, ArcSight, Wazuh, Graylog, Splunk com input syslog, Microsoft Sentinel via AMA/syslog...)
+  syslog/siem:
+    endpoint: "${env:SIEM_SYSLOG_HOST:-siem.exemplo.interno}"
+    port: ${env:SIEM_SYSLOG_PORT:-6514}
+    network: tcp
+    protocol: rfc5424
+    tls:
+      insecure: ${env:SIEM_SYSLOG_INSECURE:-false}
+      # ca_file: /etc/otelcol/siem-ca.pem
+    retry_on_failure:
+      enabled: true
+
+  # Splunk HTTP Event Collector
+  splunk_hec/siem:
+    token: "${env:SPLUNK_HEC_TOKEN:-defina-o-token}"
+    endpoint: "${env:SPLUNK_HEC_URL:-https://splunk.exemplo.interno:8088/services/collector}"
+    source: hapm-haproxy
+    sourcetype: haproxy:access:logfmt
+    index: "${env:SPLUNK_INDEX:-main}"
+
+  # Qualquer destino OTLP (Elastic, Datadog, Grafana Cloud, outro collector...)
+  otlphttp/siem:
+    endpoint: "${env:SIEM_OTLP_ENDPOINT:-https://otlp.exemplo.interno:4318}"
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki, syslog/siem]

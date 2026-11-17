@@ -51,6 +51,26 @@ public final class Normalizer {
   // ------------------------------------------------------------------ cluster
   public record ClusterInput(String name, ClusterSettings settings) {}
 
+  static final Pattern HOST_PORT = Pattern.compile("^(\\[?[^\\]\\s]+\\]?):(\\d{1,5})$");
+
+  static boolean hostPort(String v) {
+    var m = HOST_PORT.matcher(v);
+    if (!m.matches()) return false;
+    var host = m.group(1).replaceAll("^\\[|\\]$", "");
+    int port = Integer.parseInt(m.group(2));
+    return port > 0 && port < 65536 && (Checks.isIp(host) || HOSTNAME.matcher(host).matches());
+  }
+
+  static ClusterSettings.Logs logs(Checks.Ctx c, ClusterSettings.Logs in) {
+    var collector = c.str(in.collector());
+    if (collector.isEmpty()) collector = "127.0.0.1:5514";
+    if (!hostPort(collector)) c.err("logs.collector", "formato host:porta (UDP)");
+    var siem = in.siem() == null ? List.<String>of() : in.siem().stream().map(String::strip).filter(x -> !x.isEmpty()).distinct().toList();
+    if (siem.size() > 4) c.err("logs.siem", "no máximo 4 destinos");
+    for (var t : siem) if (!hostPort(t)) c.err("logs.siem", "destino inválido \"" + t + "\" (formato host:porta, syslog UDP)");
+    return new ClusterSettings.Logs(c.bool(in.enabled(), false), collector, siem, c.bool(in.userAgent(), true));
+  }
+
   public static ClusterInput cluster(String name, ClusterSettings in, ClusterSettings previous) {
     var c = new Checks.Ctx();
     var s = or(in, new ClusterSettings(null, null, null, null, null, null, null));
@@ -61,6 +81,7 @@ public final class Normalizer {
     var acme = or(s.acme(), new ClusterSettings.Acme(null, null));
     var approval = or(s.approval(), new ClusterSettings.Approval(null, null));
     var nodesIn = or(s.nodes(), new ClusterSettings.Nodes(null));
+    var logsIn = or(s.logs(), new ClusterSettings.Logs(null, null, null, null));
     var prevPass = previous != null && previous.keepalived() != null ? previous.keepalived().authPass() : null;
 
     var outName = c.name("name", name, false);
@@ -133,7 +154,8 @@ public final class Normalizer {
         haproxy, keepalived, aws, outAcme,
         new ClusterSettings.Approval(c.bool(approval.required(), false), c.bool(approval.allowSelfApproval(), false)),
         new ClusterSettings.Nodes(nodesIn.autoRemoveOfflineMinutes() == null || nodesIn.autoRemoveOfflineMinutes() == 0 ? null
-            : c.integer("nodes.autoRemoveOfflineMinutes", nodesIn.autoRemoveOfflineMinutes(), 5, 10080, null)));
+            : c.integer("nodes.autoRemoveOfflineMinutes", nodesIn.autoRemoveOfflineMinutes(), 5, 10080, null)),
+        logs(c, logsIn));
     c.done();
     return new ClusterInput(outName, settings);
   }

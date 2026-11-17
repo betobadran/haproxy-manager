@@ -29,7 +29,8 @@ if [ -z "$CID" ]; then
     "settings":{"mode":"onprem-keepalived",
       "haproxy":{"maxconn":4096,"log":"stdout format raw local0","user":"haproxy"},
       "keepalived":{"vips":["172.30.0.100/24"],"interface":"eth0","routerId":51},
-      "acme":{"backend":"172.30.0.5:8080"}}}' | j "['id']")
+      "acme":{"backend":"172.30.0.5:8080"},
+      "logs":{"enabled":true}}}' | j "['id']")
   curl -fs -XPOST "${H[@]}" $API/clusters/$CID/backends -d '{"name":"app","servers":[{"name":"app1","address":"172.30.0.21","port":8080},{"name":"app2","address":"172.30.0.22","port":8080}],"healthCheck":{"type":"http","path":"/health"}}' >/dev/null
   curl -fs -XPOST "${H[@]}" $API/clusters/$CID/backends -d '{"name":"api","balance":"leastconn","servers":[{"name":"api1","address":"172.30.0.23","port":8080}],"healthCheck":{"type":"http","path":"/health"}}' >/dev/null
   curl -fs -XPOST "${H[@]}" $API/clusters/$CID/frontends -d '{"name":"web","binds":[{"address":"*","port":80}],"defaultBackend":"app",

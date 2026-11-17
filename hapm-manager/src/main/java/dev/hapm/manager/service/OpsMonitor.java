@@ -100,7 +100,7 @@ public class OpsMonitor {
   }
 
   private void onVrrpChange(ClusterRow c, NodeRow node, String from, String to, NotificationService.Ops ops) {
-    var detail = (from == null ? "?" : from) + " → " + to;
+    var detail = from == null ? "entrou como " + to : from + " → " + to;
     if (!"MASTER".equals(to)) {
       event(c.id(), node.name(), "vrrp:" + node.name(), "vrrp", node.name() + ": " + detail, Map.of("from", String.valueOf(from), "to", to));
       return;
@@ -118,7 +118,7 @@ public class OpsMonitor {
             "O VIP passou de " + prevMaster + " para " + node.name() + " (" + detail + "). Verifique por que " + prevMaster + " deixou de ser MASTER.", data, null);
       }
     } else {
-      event(c.id(), node.name(), "cluster:master", "vrrp-master", node.name() + " é o MASTER (" + detail + ")", Map.of("to", node.name()));
+      event(c.id(), node.name(), "cluster:master", "vrrp-master", node.name() + " é o MASTER" + (from == null ? "" : " (" + detail + ")"), Map.of("to", node.name()));
     }
   }
 

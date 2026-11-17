@@ -156,6 +156,35 @@ class RenderTest {
   }
 
   @Test
+  void accessLogsAreStructuredAndValid() throws Exception {
+    var s = Fixtures.snapshot();
+    var cs = s.cluster().settings();
+    var withLogs = dev.hapm.core.validate.Normalizer.cluster(s.cluster().name(), new dev.hapm.core.model.ClusterSettings(cs.mode(), cs.rollout(),
+        cs.autoDeployOnCertRenew(), cs.haproxy(), cs.keepalived(), cs.aws(), cs.acme(), cs.approval(), cs.nodes(),
+        new dev.hapm.core.model.ClusterSettings.Logs(true, null, List.of("10.9.9.9:514"), null)), cs).settings();
+    var s2 = new Snapshot(new dev.hapm.core.model.Cluster(s.cluster().id(), s.cluster().name(), withLogs), s.frontends(), s.backends(), s.certificates(), s.nodes());
+    var cfg = HaproxyRenderer.render(s2, 1, "");
+    assertThat(cfg).contains("log 127.0.0.1:5514 len 8192 format rfc5424 local1 info").contains("log 10.9.9.9:514 len 8192 format rfc5424")
+        .contains("log-send-hostname").contains("log-format \"client=%ci:%cp fe=%ft").contains("ua=\\\"%[var(txn.hapm_ua)]\\\"");
+    // sem logs habilitados nada muda
+    assertThat(HaproxyRenderer.render(s, 1, "")).doesNotContain("log-format").doesNotContain("5514");
+    assertThatThrownBy(() -> dev.hapm.core.validate.Normalizer.cluster("x", new dev.hapm.core.model.ClusterSettings(null, null, null, null, null, null, null, null, null,
+        new dev.hapm.core.model.ClusterSettings.Logs(true, "nao tem porta", List.of("a b:1"), null)), null)).hasMessageContaining("logs.collector").hasMessageContaining("logs.siem");
+    if (Fixtures.hasBin("haproxy")) {
+      var b = BundleBuilder.build(s2, cfg, 1, s2.nodes().get(0));
+      var dir = Files.createTempDirectory("hapm-check-logs");
+      for (var e : b.files().entrySet()) {
+        var p = dir.resolve(e.getKey());
+        Files.createDirectories(p.getParent());
+        Files.writeString(p, e.getValue().replace(HaproxyRenderer.RELEASE_DIR, dir.toString()));
+      }
+      var proc = new ProcessBuilder("haproxy", "-c", "-f", dir.resolve("haproxy.cfg").toString()).redirectErrorStream(true).start();
+      var out = new String(proc.getInputStream().readAllBytes());
+      assertThat(proc.waitFor()).as(out).isZero();
+    }
+  }
+
+  @Test
   void keepalivedAcceptsGeneratedConfig() throws Exception {
     assumeTrue(Fixtures.hasBin("keepalived"), "keepalived não instalado");
     var scripts = Path.of("..", "hapm-agent", "src", "main", "dist", "scripts").toAbsolutePath().normalize().toString();

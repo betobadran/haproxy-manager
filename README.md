@@ -16,7 +16,9 @@ da UI (baixados pelo `frontend-maven-plugin`); nada de Node roda em produção.
 
 **Documentação:** [primeiros passos (criar e configurar um cluster pela tela, failover automático)](docs/primeiros-passos.md) ·
 [alertas de certificado](docs/alertas.md) · [banco de dados (SQLite / PostgreSQL)](docs/banco-de-dados.md) ·
-[login corporativo e aprovações](docs/autenticacao.md) · [failover de IP na AWS](docs/aws-failover.md)
+[login corporativo e aprovações](docs/autenticacao.md) · [failover de IP na AWS](docs/aws-failover.md) ·
+[operação do dia a dia (linha do tempo, drenar servidores, exportar/importar, scale-in)](docs/operacao.md) ·
+[logs de acesso (Loki/SIEM)](docs/logs.md)
 
 ---
 
@@ -70,10 +72,20 @@ recebe a versão desejada.
   persistente por cookie, TLS até os servidores, compressão, resolução DNS em runtime.
 - **Certificados:** upload de PEM (valida par chave/certificado, extrai domínios e validade) ou **ACME/Let's Encrypt
   HTTP-01** com renovação automática (30 dias antes) e publicação automática após renovar.
-- **Alertas de expiração de certificado** (30/14/7/1 dia, configurável) e de falha ACME: na **tela** (contador na barra
-  lateral e banner no cluster, com reconhecimento), por **e-mail** (SMTP), **Microsoft Teams** (Workflows) e **webhook**
-  assinado com HMAC. Detalhes em [docs/alertas.md](docs/alertas.md).
-- **Nós:** auto-registro, prioridade VRRP (automática ou manual), estado MASTER/BACKUP, versão aplicada, erros.
+- **Alertas** na **tela** (contador na barra lateral e banner no cluster, com reconhecimento), por **e-mail** (SMTP),
+  **Microsoft Teams** (Workflows) e **webhook** assinado com HMAC: expiração de certificado (30/14/7/1 dia) e falha ACME,
+  **failover** (VIP mudou de nó), **nó offline**/voltou, **split-brain**/sem MASTER, **publicação com falha** e
+  **servidor de backend DOWN**. Detalhes em [docs/alertas.md](docs/alertas.md).
+- **Linha do tempo** por cluster: failovers, transições VRRP, nós offline/online, servidores DOWN, operações e
+  publicações com falha.
+- **Drenar / manutenção / peso** de servidores **sem publicar** (runtime API do HAProxy, aplicada pelos agentes em
+  todos os nós e mantida após reloads).
+- **Exportar/importar** clusters em YAML/JSON (backup, promoção entre ambientes, git), com simulação e importação
+  atômica, e **importação de um `haproxy.cfg` existente**. Ver [docs/operacao.md](docs/operacao.md).
+- **Logs de acesso** estruturados (logfmt) → OTel → **Loki** e/ou **SIEM** (syslog, Splunk HEC, OTLP), com **busca na
+  tela** (status, listener, cliente, caminho, ao vivo). Ver [docs/logs.md](docs/logs.md).
+- **Nós:** auto-registro, prioridade VRRP (automática ou manual), estado MASTER/BACKUP, versão aplicada, erros;
+  na AWS, **remoção automática no scale-in** (lifecycle hook do Auto Scaling) e remoção opcional de nós offline há N min.
 - **Auditoria** de todas as ações; histórico de versões com diff e rollback.
 - **Vários clusters num só manager:** cada cluster tem topologia própria (on-prem/keepalived, AWS NLB, AWS EIP),
   nós, VIPs, listeners, certificados, histórico de versões, política de aprovação e token de join independentes.
@@ -197,7 +209,9 @@ O NLB é a entrada multi-AZ; os nós HAProxy ficam num ASG e se registram sozinh
 Health-check do NLB em `:8405/healthz` (frontend interno `hapm_stats`), IP do cliente preservado, IMDSv2,
 acesso por SSM Session Manager, `instance_refresh` rolling. O token de join fica no SSM Parameter Store
 (SecureString). O user-data baixa do S3 o **mesmo bundle** do on-premise (`make-bundle.sh`) e roda o
-`install-node.sh --no-keepalived`. Crie o cluster no manager com topologia **aws-nlb**.
+`install-node.sh --no-keepalived --aws-lifecycle`. Crie o cluster no manager com topologia **aws-nlb**.
+No **scale-in**, um lifecycle hook segura a instância até o agente avisar o manager (que remove o nó) e concluir o
+hook — ver [docs/operacao.md](docs/operacao.md#scale-in-na-aws).
 
 ```bash
 cd deploy/terraform/aws-nlb
@@ -229,6 +243,8 @@ métricas do host (hostmetrics)          ┘                                    
 ```
 
 - `observability/otel-collector/node.yaml` e `gateway.yaml`; labels `hapm_cluster` / `hapm_node` em tudo.
+- **Logs de acesso**: o collector do nó recebe o syslog do HAProxy e o gateway grava no **Loki** (`/otlp`);
+  `gateway-siem.yaml` acrescenta um SIEM. Busca na aba **Logs** do cluster ([docs/logs.md](docs/logs.md)).
 - `observability/prometheus/alerts.yml`: sem MASTER, **split-brain**, keepalived parado/FAULT, HAProxy fora,
   nó sem heartbeat, publicação falhou, config divergente, backend sem servidores, servidor DOWN, 5xx > 5%,
   certificado expirando/expirado.
@@ -245,7 +261,7 @@ Métricas próprias: `hapm_vrrp_is_master`, `hapm_vrrp_state{state}`, `hapm_keep
 
 **Manager** (variáveis de ambiente): `HAPM_PORT` (8080), `HAPM_DATA_DIR`, `HAPM_ADMIN_USER`/`HAPM_ADMIN_PASSWORD`
 (senha aleatória no log se vazio), `HAPM_SECRET` (assinatura das sessões; defina o mesmo em todos os managers),
-`HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
+`HAPM_LOKI_URL` (+ `HAPM_LOKI_TENANT`, `HAPM_LOKI_TOKEN`) para a busca de logs, `HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
 (`acme://letsencrypt.org`; staging: `acme://letsencrypt.org/staging`), `HAPM_HAPROXY_BIN`, `HAPM_NODE_OFFLINE_AFTER` (15 s).
 
 **Agente**: ver `hapm-agent/src/main/dist/systemd/agent.env.example` — `HAPM_MANAGER_URL`, `HAPM_JOIN_TOKEN`,
@@ -278,6 +294,11 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 | GET/POST/PUT/DELETE | `/api/users[/{username}]` | usuários locais (ADMIN) |
 | POST | `/api/clusters/{id}/deployments/{did}/rollback` | nova versão com a config antiga |
 | GET | `/api/audit` | auditoria |
+| GET | `/api/clusters/{id}/events` | linha do tempo (failover, nós, servidores, publicações) |
+| GET/PUT | `/api/clusters/{id}/runtime[/servers/{backend}/{servidor}]` | drenar / manutenção / peso sem publicar |
+| GET | `/api/clusters/{id}/export?format=yaml&secrets=false` | exportar (ADMIN) |
+| POST | `/api/clusters/import`, `/api/clusters/{id}/import?mode=merge\|replace`, `/api/clusters/{id}/import-haproxy` | importar (ADMIN; `dryRun=true` simula) |
+| GET | `/api/clusters/{id}/logs?status=5xx&frontend=...` | busca de logs de acesso no Loki (OPERATOR) |
 | GET/POST/PUT | `/api/notifications[/count\|/{id}/ack\|/settings\|/test/{canal}\|/check]` | alertas e canais ([docs/alertas.md](docs/alertas.md)) |
 | — | `/agent/v1/heartbeat`, `/agent/v1/bundle/{v}` | uso dos agentes (token de join) |
 | GET | `/metrics`, `/actuator/health` | Prometheus / health |
@@ -286,8 +307,9 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 - Papéis são globais (valem para todos os clusters); papéis **por cluster/equipe** são o próximo passo natural.
 - Chaves privadas dos certificados ficam no banco do manager (proteja o volume/banco; criptografia em repouso com KMS/Vault está no roadmap).
 - ACME apenas HTTP-01 (sem wildcard); DNS-01 (Route 53 etc.) no roadmap.
-- Logs de acesso do HAProxy → OTel (receiver syslog) → Loki ainda não incluídos.
-- Scale-in na AWS deixa o nó como "offline" no manager até ser removido (lifecycle hook para remoção automática no roadmap).
+- Destinos SIEM direto do HAProxy são só syslog **UDP**; para TCP/TLS use o gateway OTel (`gateway-siem.yaml`).
+- O conversor de `haproxy.cfg` não traduz condições com OU (`||`) nem `userlist`/`errorfile`: ficam no bloco avançado
+  ou nos avisos.
 - Templates de erro customizados, `userlist`/basic auth, cache e peers (stick-table sincronizada entre nós) ainda não expostos na UI (use o bloco avançado).
 
 ## Licença

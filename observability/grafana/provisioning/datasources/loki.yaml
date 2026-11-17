@@ -1,0 +1,9 @@
+apiVersion: 1
+datasources:
+  # logs de acesso do HAProxy (via OTel Collector). Ex. no Explore:
+  #   {service_name="hapm-haproxy"} | hapm_cluster="lab" | logfmt | status=~"5.."
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: ${LOKI_URL}

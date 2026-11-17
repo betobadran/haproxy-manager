@@ -75,6 +75,7 @@ public class SecurityConfig {
             // clusters, tokens e nós (estrutura): ADMIN
             .requestMatchers(HttpMethod.POST, "/api/clusters").hasAuthority(A)
             .requestMatchers(HttpMethod.GET, "/api/clusters/*/export").hasAuthority(A)
+            .requestMatchers(HttpMethod.GET, "/api/clusters/*/logs").hasAuthority(O)
             .requestMatchers(HttpMethod.POST, "/api/clusters/import", "/api/clusters/*/import", "/api/clusters/*/import-haproxy").hasAuthority(A)
             .requestMatchers(HttpMethod.PUT, "/api/clusters/*").hasAuthority(A)
             .requestMatchers(HttpMethod.DELETE, "/api/clusters/*").hasAuthority(A)

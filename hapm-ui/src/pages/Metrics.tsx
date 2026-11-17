@@ -72,7 +72,8 @@ export function MetricsTab({ cluster }: { cluster: any }) {
   const nodeStatesOf = (states: Record<string, string>) => Object.keys(states ?? {}).filter((n) => !node || n === node);
   const beLevel = c.backendsTotal === 0 ? 'good' : c.backendsUp === c.backendsTotal ? 'good' : c.backendsUp === 0 ? 'crit' : 'warn';
   // servidores DOWN em algum nó (o backend pode seguir UP com os demais)
-  const serversDown = (m.servers as any[]).filter((s) => nodeStatesOf(s.states).some((n) => s.states[n] && s.states[n] !== 'UP')).length;
+  // drenando/manutenção são decisões do operador: só DOWN (health-check) conta como problema
+  const serversDown = (m.servers as any[]).filter((s) => nodeStatesOf(s.states).some((n) => s.states[n] === 'DOWN')).length;
   const beTile = beLevel !== 'good' ? beLevel : serversDown > 0 ? 'warn' : 'good';
   const nodeStates = (states: Record<string, string>) => m.nodes.filter((n: any) => !node || n.name === node).map((n: any) => n.name);
   const stLevel = (s?: string) => (s === 'UP' ? 'good' : s === 'MAINT' || s === 'DRAIN' || s === 'NOLB' ? 'warn' : 'crit');

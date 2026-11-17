@@ -30,6 +30,11 @@ hapm:
   node-offline-after-sec: ${HAPM_NODE_OFFLINE_AFTER:15}
   deployment-timeout-sec: 600
   cert-renew-before-days: 30
+  # busca de logs de acesso na tela (Loki 3.x; os logs chegam via OTel Collector). Vazio = tela de logs desabilitada.
+  loki:
+    url: ${HAPM_LOKI_URL:}
+    tenant: ${HAPM_LOKI_TENANT:}
+    token: ${HAPM_LOKI_TOKEN:}
   auth:
     session-hours: 12
     # usuários locais (inclui o admin inicial). Em produção, mantenha só um admin local "break-glass".

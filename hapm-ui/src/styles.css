@@ -27,7 +27,7 @@ pre { background: var(--code); border: 1px solid var(--border); border-radius: 6
 .side a { display: block; color: var(--side-text); padding: 6px 10px; border-radius: 6px; }
 .side a.active, .side a:hover { background: #1f2937; color: #fff; }
 .side .section { margin: 16px 0 6px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; }
-.main { padding: 22px 28px; max-width: 1280px; width: 100%; }
+.main { padding: 22px 28px; max-width: 1280px; width: 100%; min-width: 0; }
 .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .top h2 { margin: 0; font-size: 20px; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex-wrap: wrap; }
@@ -137,3 +137,9 @@ a.btn.primary { background: var(--accent); border-color: var(--accent); color: v
 .banner-err { color: var(--err); } .banner-warn { color: var(--warn); } .banner-ok { color: var(--ok); }
 .banner > div { color: var(--text); margin-top: 6px; } h4 { margin: 18px 0 8px; }
 tr.muted td { opacity: .7; }
+
+/* logs */
+table.logs td { font-size: 12.5px; vertical-align: top; }
+table.logs td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+table.logs pre { white-space: pre-wrap; word-break: break-all; max-height: none; }
+.logs-wrap { overflow-x: auto; }

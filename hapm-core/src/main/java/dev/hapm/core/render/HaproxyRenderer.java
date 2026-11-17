@@ -1,5 +1,7 @@
 package dev.hapm.core.render;
 
+import dev.hapm.core.model.ClusterSettings;
+
 import dev.hapm.core.model.Backend;
 import dev.hapm.core.model.Certificate;
 import dev.hapm.core.model.Cluster;
@@ -119,7 +121,32 @@ public final class HaproxyRenderer {
     };
   }
 
+  /** Formato logfmt (chave=valor) dos logs de acesso: legível, e o Loki ("| logfmt") e o OTel interpretam sem regex. */
+  static final String HTTP_LOG_FORMAT = "client=%ci:%cp fe=%ft be=%b srv=%s method=%HM host=\\\"%[var(txn.hapm_host)]\\\" path=%{+Q}HP status=%ST "
+      + "bytes_in=%U bytes_out=%B t_req=%TR t_wait=%Tw t_conn=%Tc t_resp=%Tr t_total=%Ta term=%tsc retries=%rc conns=%ac tls=%sslv";
+  static final String TCP_LOG_FORMAT = "client=%ci:%cp fe=%ft be=%b srv=%s bytes_in=%U bytes_out=%B t_wait=%Tw t_conn=%Tc t_total=%Tt term=%ts "
+      + "retries=%rc conns=%ac";
+
+  static void accessLog(List<String> L, Frontend f, ClusterSettings.Logs logs) {
+    if (logs == null || !logs.on()) return;
+    if (f.isHttp()) {
+      L.add(ind("http-request set-var(txn.hapm_host) req.hdr(host),field(1,:),lower,json(utf8s)"));
+      var fmt = HTTP_LOG_FORMAT;
+      if (!Boolean.FALSE.equals(logs.userAgent())) {
+        L.add(ind("http-request set-var(txn.hapm_ua) req.fhdr(user-agent),json(utf8s)"));
+        fmt += " ua=\\\"%[var(txn.hapm_ua)]\\\"";
+      }
+      L.add(ind("log-format \"" + fmt + "\""));
+    } else {
+      L.add(ind("log-format \"" + TCP_LOG_FORMAT + "\""));
+    }
+  }
+
   private static List<String> frontend(Frontend f, String acmeBackend) {
+    return frontend(f, acmeBackend, null);
+  }
+
+  private static List<String> frontend(Frontend f, String acmeBackend, ClusterSettings.Logs logs) {
     var L = new ArrayList<String>();
     boolean http = f.isHttp();
     boolean hasSsl = f.binds().stream().anyMatch(Frontend.Bind::ssl);
@@ -130,6 +157,7 @@ public final class HaproxyRenderer {
     if (f.maxconn() != null) L.add(ind("maxconn " + f.maxconn()));
     if (f.timeoutClient() != null) L.add(ind("timeout client " + f.timeoutClient()));
     L.add(ind(http ? "option httplog" : "option tcplog"));
+    accessLog(L, f, logs);
 
     boolean useAcme = http && f.acme() && acmeBackend != null;
     if (useAcme) L.add(ind("acl hapm_acme path_beg /.well-known/acme-challenge/"));
@@ -259,6 +287,13 @@ public final class HaproxyRenderer {
     L.add("# ==========================================================================");
     L.add("global");
     L.add(ind("log " + h.log()));
+    var logs = s.cluster().settings().logs();
+    if (logs != null && logs.on()) {
+      // logs de acesso: OTel Collector local (-> Loki/SIEM) e destinos syslog adicionais, em RFC 5424 com o hostname do nó
+      L.add(ind("log-send-hostname"));
+      L.add(ind("log " + logs.collector() + " len 8192 format rfc5424 local1 info"));
+      for (var target : logs.siem()) L.add(ind("log " + target + " len 8192 format rfc5424 local1 info"));
+    }
     L.add(ind("maxconn " + h.maxconn()));
     if (h.nbthread() != null) L.add(ind("nbthread " + h.nbthread()));
     if (!h.user().isEmpty()) {
@@ -309,7 +344,7 @@ public final class HaproxyRenderer {
     if (!h.statsUser().isEmpty() && !h.statsPassword().isEmpty()) L.add(ind("stats auth " + h.statsUser() + ":" + h.statsPassword()));
     L.add("");
     for (var f : fes) {
-      L.addAll(frontend(f, acmeBackend));
+      L.addAll(frontend(f, acmeBackend, s.cluster().settings().logs()));
       L.add("");
     }
     if (acmeBackend != null) {

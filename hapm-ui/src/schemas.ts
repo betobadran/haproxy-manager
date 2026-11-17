@@ -85,6 +85,11 @@ export const clusterSchema: Row[] = [
         help: 'IP de overlay: um IP fora do CIDR da VPC; o novo MASTER aponta a rota /32 nessas tabelas para a própria ENI. Os clientes precisam usar essas tabelas (mesma VPC, ou via Transit Gateway/VPN com rota estática).' },
       { key: 'eipAllocationId', label: 'Elastic IP (opcional, acompanha o MASTER)', placeholder: 'eipalloc-...' },
     ] },
+    { key: 'logs', label: 'Logs de acesso', type: 'group', fields: [
+      [{ key: 'enabled', label: 'Enviar logs de acesso (logfmt, syslog RFC 5424)', type: 'checkbox' },
+        { key: 'userAgent', label: 'Incluir User-Agent', type: 'checkbox', default: true }],
+      [{ key: 'collector', label: 'OTel Collector do nó (UDP host:porta)', placeholder: '127.0.0.1:5514', default: '127.0.0.1:5514' },
+        { key: 'siem', label: 'Destinos syslog adicionais (SIEM, UDP host:porta)', type: 'tokens', placeholder: 'siem.exemplo.interno:514' }]] },
     { key: 'nodes', label: 'Nós', type: 'group', fields: [[
       { key: 'autoRemoveOfflineMinutes', label: 'Remover automaticamente nós offline há mais de (min; vazio = nunca)', type: 'number',
         help: 'Útil com Auto Scaling na AWS (o lifecycle hook já remove na hora; isto cobre instâncias que sumiram sem avisar). Mínimo 5.' }]] },

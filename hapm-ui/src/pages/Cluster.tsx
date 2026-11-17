@@ -8,9 +8,10 @@ import { useFmt, useT, useTs } from '../prefs';
 import { ClusterAlerts, Timeline } from './Alerts';
 import { MetricsTab } from './Metrics';
 import { ClusterImportExport } from './ImportExport';
+import { LogsTab } from './Logs';
 
 const TABS: [string, string][] = [
-  ['', 'Visão geral'], ['metrics', 'Métricas'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
+  ['', 'Visão geral'], ['metrics', 'Métricas'], ['logs', 'Logs'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
   ['publish', 'Publicar'], ['approvals', 'Aprovações'], ['history', 'Histórico'], ['settings', 'Configurações'],
 ];
 
@@ -39,6 +40,7 @@ export function ClusterPage({ cid, tab, sub }: { cid: string; tab: string; sub?:
       </div>
       {tab === '' && <Overview cluster={cluster} />}
       {tab === 'metrics' && <MetricsTab cluster={cluster} />}
+      {tab === 'logs' && <LogsTab cluster={cluster} />}
       {(tab === 'frontends' || tab === 'backends') && <Objects key={tab + (sub ?? '')} cluster={cluster} kind={tab} sub={sub} />}
       {tab === 'certificates' && <Certificates cluster={cluster} />}
       {tab === 'publish' && <Publish cluster={cluster} />}

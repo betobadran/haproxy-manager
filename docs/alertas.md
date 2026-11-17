@@ -1,7 +1,8 @@
-# Alertas: expiração de certificado e falhas ACME
+# Alertas: certificados, failover, nós, servidores e publicações
 
-O manager verifica os certificados de todos os clusters **a cada hora** (e 1 minuto após iniciar) e gera alertas que
-aparecem na **tela** e são enviados por **e-mail**, **Microsoft Teams** e/ou **webhook**.
+Os alertas aparecem na **tela** e são enviados por **e-mail**, **Microsoft Teams** e/ou **webhook**. Há dois grupos:
+certificados (verificados a cada hora) e **alertas operacionais** (detectados a partir dos heartbeats dos agentes, em
+segundos). Todos também ficam na **linha do tempo** do cluster (ver [operacao.md](operacao.md)).
 
 ## Quando um alerta é gerado
 
@@ -14,7 +15,27 @@ aparecem na **tela** e são enviados por **e-mail**, **Microsoft Teams** e/ou **
 Cada limite gera **um único alerta** por certificado: ao cruzar 30 dias você recebe um aviso, ao cruzar 14 outro, e assim
 por diante. Se o certificado for renovado (nova data de validade), a contagem recomeça. Isso evita spam a cada hora.
 
-Os limites são configurados em **Canais de notificação › Quando alertar** (1 a 365 dias, separados por vírgula).
+Os limites são configurados em **Canais de notificação › Certificados: quando alertar** (1 a 365 dias, separados por vírgula).
+
+### Alertas operacionais
+
+| Evento | Nível | Tipo (`kind`) | Como é detectado |
+|---|---|---|---|
+| **Failover**: o VIP mudou de nó | atenção | `failover` | um nó passa a MASTER e o MASTER anterior era outro |
+| **Nó offline** | atenção; **crítico** se não sobrou nenhum nó online | `node-offline` | sem heartbeat há mais de *N* segundos (padrão 60) |
+| Nó voltou | info | `node-online` | heartbeat depois de um alerta de offline |
+| Nó removido (scale-in na AWS ou remoção automática) | info | `node-left` | ver [operacao.md](operacao.md#scale-in-na-aws) |
+| **Split-brain**: dois ou mais nós MASTER | crítico | `split-brain` | mesma condição em 2 verificações seguidas (~10 s) |
+| **Sem MASTER**: há nós online, nenhum com o VIP | crítico | `no-master` | idem |
+| VRRP normalizado | info | `vrrp-ok` | volta a haver exatamente um MASTER |
+| **Publicação falhou** (os nós voltaram para a última versão boa) | crítico | `deploy-failed` | erro em um nó ou timeout |
+| **Servidor de backend DOWN** (health-check do HAProxy) | atenção; **crítico** se o backend ficou sem servidores | `server-down` | estado vindo do exporter do HAProxy de cada nó |
+| Servidor voltou | info | `server-up` | |
+
+Servidores que você **drenou** ou pôs **em manutenção** não geram alerta (só DOWN do health-check conta). Cada tipo
+pode ser desligado em **Canais de notificação › Alertas operacionais**, onde também se define o tempo para considerar um
+nó offline (15 a 3600 s). O "estado atual" de cada nó/servidor é o último evento gravado, então reiniciar o manager
+não repete alertas já enviados.
 
 ## Tela
 
@@ -64,7 +85,7 @@ O HAPM envia um *Adaptive Card* com nível (cor), título, mensagem e horário.
 ```
 
 Cabeçalhos:
-- `X-HAPM-Event`: o `kind` (`cert-expiring`, `cert-expired`, `acme-failed`, `test`).
+- `X-HAPM-Event`: o `kind` (`cert-expiring`, `cert-expired`, `acme-failed`, `failover`, `node-offline`, `split-brain`, `deploy-failed`, `server-down`... e `test`).
 - `X-HAPM-Signature: sha256=<hex>`: HMAC-SHA256 do corpo **exato** com o segredo configurado (só se houver segredo).
 
 Validação no receptor (exemplo em Python):
@@ -85,6 +106,9 @@ Uma falha de entrega não impede os outros canais nem a tela: o alerta fica regi
 Use **Enviar teste** após corrigir a configuração.
 
 ## API
+
+Payload do webhook para alertas operacionais: o mesmo formato acima, com `kind` correspondente e `data` contendo
+`cluster` e, conforme o caso, `node`, `from`/`to` (failover), `server`, `masters`, `version`/`error` (publicação).
 
 | Método | Caminho | Papel |
 |---|---|---|

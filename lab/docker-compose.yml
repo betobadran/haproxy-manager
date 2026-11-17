@@ -1,5 +1,5 @@
 # Lab completo do HAPM: 2 nós HAProxy+Keepalived compartilhando o VIP 172.30.0.100,
-# 2 backends, manager, OTel Collector (edge por nó + gateway), Prometheus e Grafana.
+# 2 backends, manager, OTel Collector (edge por nó + gateway), Prometheus, Loki (logs de acesso) e Grafana.
 # Suba com ./setup.sh (cria o cluster no manager e gera o token de join).
 name: hapm-lab
 
@@ -35,6 +35,7 @@ services:
     environment:
       HAPM_ADMIN_PASSWORD: ${HAPM_ADMIN_PASSWORD:-admin12345}
       HAPM_ACME_DIRECTORY: https://acme-staging-v02.api.letsencrypt.org/directory
+      HAPM_LOKI_URL: http://loki:3100
     volumes: ["manager-data:/data"]
     ports: ["8080:8080"]
     networks: { hanet: { ipv4_address: 172.30.0.5 } }
@@ -94,6 +95,7 @@ services:
     environment:
       PROMETHEUS_REMOTE_WRITE_URL: http://prometheus:9090/api/v1/write
       HAPM_MANAGER_TARGET: manager:8080
+      LOKI_OTLP_ENDPOINT: http://loki:3100/otlp
     volumes: ["../observability/otel-collector/gateway.yaml:/etc/otelcol/config.yaml:ro"]
     networks: { hanet: { ipv4_address: 172.30.0.30 } }
 
@@ -108,12 +110,20 @@ services:
     ports: ["9090:9090"]
     networks: [hanet]
 
+  loki:
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports: ["3100:3100"]
+    networks: [hanet]
+
   grafana:
     image: grafana/grafana:11.3.1
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       PROMETHEUS_URL: http://prometheus:9090
+      LOKI_URL: http://loki:3100
       # lab: leitura sem login (somente Viewer). Não use em produção.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
