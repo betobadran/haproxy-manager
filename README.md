@@ -289,3 +289,8 @@ Autenticação: `POST /api/auth/login` (local/LDAP) ou SSO em `/oauth2/authoriza
 - Logs de acesso do HAProxy → OTel (receiver syslog) → Loki ainda não incluídos.
 - Scale-in na AWS deixa o nó como "offline" no manager até ser removido (lifecycle hook para remoção automática no roadmap).
 - Templates de erro customizados, `userlist`/basic auth, cache e peers (stick-table sincronizada entre nós) ainda não expostos na UI (use o bloco avançado).
+
+## Licença
+
+[Apache License 2.0](LICENSE) — uso, modificação e redistribuição livres (inclusive comercial), com concessão
+de patentes; ao redistribuir, mantenha o `LICENSE` e o [`NOTICE`](NOTICE).
