@@ -68,6 +68,28 @@
       <scope>runtime</scope>
     </dependency>
     <!-- alertas por e-mail (SMTP configurado pela tela) -->
+    <!-- AWS: credenciais (cadeia padrão / AssumeRole), certificados ACM e validação DNS no Route 53 -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sts</artifactId>
+      <exclusions>
+        <exclusion><groupId>software.amazon.awssdk</groupId><artifactId>netty-nio-client</artifactId></exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>acm</artifactId>
+      <exclusions>
+        <exclusion><groupId>software.amazon.awssdk</groupId><artifactId>netty-nio-client</artifactId></exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>route53</artifactId>
+      <exclusions>
+        <exclusion><groupId>software.amazon.awssdk</groupId><artifactId>netty-nio-client</artifactId></exclusion>
+      </exclusions>
+    </dependency>
     <!-- exportar/importar clusters em YAML -->
     <dependency>
       <groupId>tools.jackson.dataformat</groupId>

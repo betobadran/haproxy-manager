@@ -43,6 +43,7 @@ public class ObjectService {
   private final JsonMapper json;
   private final PemService pem;
   private final CertService certs;
+  @org.springframework.beans.factory.annotation.Autowired(required = false) private AcmService acm;
 
   public ObjectService(Store store, JsonMapper json, PemService pem, CertService certs) {
     this.store = store;
@@ -81,7 +82,7 @@ public class ObjectService {
           yield header.withPem(parsed.pem(), parsed.meta());
         }
         if (header.source().equals("upload")) throw new dev.hapm.core.validate.ValidationException("pem: obrigatório");
-        yield new Certificate(header.name(), header.source(), null, prev == null ? null : prev.meta(), header.acme());
+        yield new Certificate(header.name(), header.source(), null, prev == null ? null : prev.meta(), header.acme(), header.aws());
       }
     };
   }
@@ -111,6 +112,7 @@ public class ObjectService {
     var row = store.createObject(clusterId, k.kind, name, data);
     store.audit(user, clusterId, k.kind + ".create", name, null);
     if (data instanceof Certificate c && "acme".equals(c.source()) && !c.usable()) certs.issue(clusterId, row.id(), user);
+    if (data instanceof Certificate c && "acm".equals(c.source()) && !c.usable() && acm != null) acm.start(clusterId, row.id(), user);
     return store.getObject(clusterId, k.kind, row.id()).orElseThrow();
   }
 

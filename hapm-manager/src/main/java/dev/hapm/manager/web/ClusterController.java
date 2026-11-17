@@ -36,6 +36,7 @@ public class ClusterController {
   private final Store store;
   private final DeployService deploy;
   private final dev.hapm.manager.service.MetricsService metrics;
+  @org.springframework.beans.factory.annotation.Autowired private dev.hapm.manager.service.AwsClients aws;
 
   public ClusterController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics) {
     this.store = store;
@@ -106,6 +107,7 @@ public class ClusterController {
     var c = cluster(cid);
     var n = Normalizer.cluster(req.name() != null ? req.name() : c.name(), req.settings(), c.settings());
     var u = store.updateCluster(cid, n.name(), n.settings());
+    aws.forget(cid);
     store.audit(p.getName(), cid, "cluster.update", u.name(), null);
     return view(u, p);
   }

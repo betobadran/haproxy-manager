@@ -61,6 +61,22 @@ public final class Normalizer {
     return port > 0 && port < 65536 && (Checks.isIp(host) || HOSTNAME.matcher(host).matches());
   }
 
+  static final Pattern ACM_ARN = Pattern.compile("^arn:aws[a-z-]*:acm:[a-z0-9-]+:\\d{12}:certificate/[A-Za-z0-9-]{8,64}$");
+  static final Pattern ROLE_ARN = Pattern.compile("^arn:aws[a-z-]*:iam::\\d{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$");
+  static final Pattern EXTERNAL_ID = Pattern.compile("^[A-Za-z0-9+=,.@:/_-]{2,1224}$");
+
+  static ClusterSettings.AwsAccess awsAccess(Checks.Ctx c, ClusterSettings.AwsAccess in, String failoverRegion) {
+    var region = c.str(in.region());
+    if (region.isEmpty()) region = failoverRegion == null ? "" : failoverRegion;
+    if (!region.isEmpty() && !REGION.matcher(region).matches()) c.err("awsAccess.region", "região inválida (ex.: sa-east-1)");
+    var role = c.str(in.roleArn());
+    if (!role.isEmpty() && !ROLE_ARN.matcher(role).matches()) c.err("awsAccess.roleArn", "ARN de role inválido (arn:aws:iam::123456789012:role/nome)");
+    var ext = c.str(in.externalId());
+    if (!ext.isEmpty() && !EXTERNAL_ID.matcher(ext).matches()) c.err("awsAccess.externalId", "ExternalId: 2 a 1224 caracteres (letras, números e +=,.@:/-_)");
+    if (!ext.isEmpty() && role.isEmpty()) c.err("awsAccess.externalId", "ExternalId só faz sentido com uma role para assumir");
+    return new ClusterSettings.AwsAccess(region, role, ext, c.integer("awsAccess.sessionMinutes", in.sessionMinutes(), 15, 720, 60));
+  }
+
   static ClusterSettings.Logs logs(Checks.Ctx c, ClusterSettings.Logs in) {
     var collector = c.str(in.collector());
     if (collector.isEmpty()) collector = "127.0.0.1:5514";
@@ -120,7 +136,9 @@ public final class Normalizer {
         c.integer("keepalived.checkRise", k.checkRise(), 1, 20, 2));
     var rtbs = c.tokens("aws.routeTableIds", a.routeTableIds());
     var aws = new ClusterSettings.Aws(c.str(a.region()), c.str(a.eipAllocationId()), c.str(a.privateVip()), c.str(a.routeVip()).replaceAll("/32$", ""),
-        rtbs, c.bool(a.manageSourceDestCheck(), true));
+        rtbs, c.bool(a.manageSourceDestCheck(), true), c.str(a.failoverRoleArn()), c.str(a.failoverExternalId()));
+    if (!aws.failoverRoleArn().isEmpty() && !ROLE_ARN.matcher(aws.failoverRoleArn()).matches()) c.err("aws.failoverRoleArn", "ARN de role inválido (arn:aws:iam::123456789012:role/nome)");
+    if (!aws.failoverExternalId().isEmpty() && !EXTERNAL_ID.matcher(aws.failoverExternalId()).matches()) c.err("aws.failoverExternalId", "ExternalId inválido");
     var outAcme = new ClusterSettings.Acme(c.str(acme.email()), c.str(acme.backend()));
 
     if (!IFACE.matcher(keepalived.iface()).matches()) c.err("keepalived.interface", "interface inválida");
@@ -155,7 +173,8 @@ public final class Normalizer {
         new ClusterSettings.Approval(c.bool(approval.required(), false), c.bool(approval.allowSelfApproval(), false)),
         new ClusterSettings.Nodes(nodesIn.autoRemoveOfflineMinutes() == null || nodesIn.autoRemoveOfflineMinutes() == 0 ? null
             : c.integer("nodes.autoRemoveOfflineMinutes", nodesIn.autoRemoveOfflineMinutes(), 5, 10080, null)),
-        logs(c, logsIn));
+        logs(c, logsIn),
+        awsAccess(c, or(s.awsAccess(), new ClusterSettings.AwsAccess(null, null, null, null)), aws.region()));
     c.done();
     return new ClusterInput(outName, settings);
   }
@@ -329,7 +348,7 @@ public final class Normalizer {
   public static Certificate certificateHeader(Certificate in, Certificate existing) {
     var c = new Checks.Ctx();
     var name = c.name("name", in.name() != null ? in.name() : existing != null ? existing.name() : null);
-    var source = c.oneOf("source", in.source() != null ? in.source() : existing != null ? existing.source() : null, List.of("upload", "acme"), "upload");
+    var source = c.oneOf("source", in.source() != null ? in.source() : existing != null ? existing.source() : null, List.of("upload", "acme", "acm"), "upload");
     Certificate.AcmeInfo acme = null;
     if (source.equals("acme")) {
       var a = in.acme() != null ? in.acme() : existing != null ? existing.acme() : null;
@@ -340,7 +359,29 @@ public final class Normalizer {
       acme = new Certificate.AcmeInfo(domains, c.str(a == null ? null : a.email()),
           prev == null ? null : prev.status(), prev == null ? null : prev.error(), prev == null ? null : prev.issuedAt(), prev == null ? null : prev.updatedAt());
     }
+    Certificate.AwsInfo aws = null;
+    if (source.equals("acm")) {
+      var a = in.aws() != null ? in.aws() : existing != null ? existing.aws() : null;
+      var prev = existing != null ? existing.aws() : null;
+      var arn = c.str(a == null ? null : a.arn());
+      if (!arn.isEmpty() && !ACM_ARN.matcher(arn).matches()) c.err("aws.arn", "ARN de certificado ACM inválido");
+      var domains = c.tokens("aws.domains", a == null ? null : a.domains()).stream().map(String::toLowerCase).toList();
+      if (arn.isEmpty() && domains.isEmpty()) c.err("aws.domains", "informe os domínios (ou o ARN de um certificado exportável existente)");
+      if (domains.size() > 10) c.err("aws.domains", "no máximo 10 nomes por certificado");
+      for (var d : domains) if (!Checks.DOMAIN.matcher(d).matches() || !d.contains(".")) c.err("aws.domains", "domínio inválido: \"" + d + "\"");
+      var validation = c.oneOf("aws.validation", a == null ? null : a.validation(), List.of("route53", "manual"), "route53");
+      var zone = c.str(a == null ? null : a.hostedZoneId()).replaceFirst("^/hostedzone/", "");
+      if (!zone.isEmpty() && !zone.matches("^Z[A-Z0-9]{1,32}$")) c.err("aws.hostedZoneId", "id de zona inválido (ex.: Z0123456789ABC)");
+      // ARN/domínios não mudam depois do pedido (seria outro certificado no ACM)
+      if (prev != null && prev.arn() != null && !prev.arn().isEmpty() && !arn.isEmpty() && !arn.equals(prev.arn())) c.err("aws.arn", "crie outro certificado para usar outro ARN");
+      if (prev != null && prev.arn() != null && !prev.arn().isEmpty()) {
+        arn = prev.arn();
+        domains = prev.domains() == null ? domains : prev.domains();
+      }
+      aws = new Certificate.AwsInfo(arn, domains, validation, zone, prev == null ? null : prev.status(), prev == null ? null : prev.error(),
+          prev == null ? null : prev.records(), prev == null ? null : prev.exportedAt(), prev == null ? null : prev.updatedAt());
+    }
     c.done();
-    return new Certificate(name, source, null, null, acme);
+    return new Certificate(name, source, null, null, acme, aws);
   }
 }

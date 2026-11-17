@@ -263,12 +263,16 @@ function Objects({ cluster, kind, sub }: { cluster: any; kind: string; sub?: str
 }
 
 // ------------------------------------------------------------------ certificados
+const ACM_STATUS: Record<string, string> = { requested: 'pending', 'pending-validation': 'pending', issued: 'issued', error: 'error' };
+const ACM_LABEL: Record<string, string> = { requested: 'pedido', 'pending-validation': 'aguardando validação DNS', issued: 'emitido', error: 'erro' };
+
 function Certificates({ cluster }: { cluster: any }) {
   const t = useT();
   const fmt = useFmt();
   const { data: certs, reload } = useLoad<any[]>(() => api('GET', `/clusters/${cluster.id}/certificates`), [cluster.id], 4000);
   const [upload, setUpload] = useState<any>({});
   const [acme, setAcme] = useState<any>({});
+  const [acm, setAcm] = useState<any>({ validation: 'route53' });
   const run = useAction();
   const toast = useToast();
   const { canEdit } = usePerm();
@@ -281,6 +285,17 @@ function Certificates({ cluster }: { cluster: any }) {
   const doAcme = run(async () => {
     await api('POST', `/clusters/${cluster.id}/certificates`, { name: acme.name, source: 'acme', acme: { domains: acme.domains, email: acme.email } });
     toast(t('emissão iniciada — acompanhe o status'));
+    reload();
+  });
+  const doAcm = run(async () => {
+    const existing = !!acm.arn?.trim();
+    if (!existing && !confirm(t('Pedir um certificado público EXPORTÁVEL no ACM gera cobrança da AWS por emissão e por renovação. Continuar?'))) return;
+    await api('POST', `/clusters/${cluster.id}/certificates`, {
+      name: acm.name, source: 'acm',
+      aws: existing ? { arn: acm.arn.trim() } : { domains: acm.domains, validation: acm.validation, hostedZoneId: acm.hostedZoneId },
+    });
+    toast(existing ? t('exportando do ACM — acompanhe o status') : t('pedido enviado ao ACM — acompanhe a validação'));
+    setAcm({ validation: 'route53' });
     reload();
   });
   const issue = (c: any) => run(async () => {
@@ -307,16 +322,25 @@ function Certificates({ cluster }: { cluster: any }) {
                 return (
                   <tr key={c.id}>
                     <td><b>{c.name}</b></td>
-                    <td>{(c.meta?.domains ?? c.acme?.domains ?? []).join(', ')}</td>
+                    <td>{(c.meta?.domains ?? c.acme?.domains ?? c.aws?.domains ?? []).join(', ')}</td>
                     <td>{d == null ? '—' : <span className={d < 14 ? 'b-err' : d < 30 ? 'b-warn' : ''}>{fmt.date(c.meta.notAfter)} ({t('{n} dias', { n: d })})</span>}</td>
-                    <td>{c.source === 'acme' ? 'ACME' : 'upload'}</td>
+                    <td>{c.source === 'acme' ? "Let's Encrypt" : c.source === 'acm' ? <span title={c.aws?.arn}>AWS ACM</span> : 'upload'}</td>
                     <td>
-                      {c.source === 'acme' ? <Badge s={c.acme?.status ?? 'pending'} /> : c.hasKey ? <Badge s="succeeded" text="ok" /> : '—'}
-                      {c.acme?.error && <div className="err" style={{ fontSize: 12 }}>{c.acme.error}</div>}
+                      {c.source === 'acme' ? <Badge s={c.acme?.status ?? 'pending'} />
+                        : c.source === 'acm' ? <Badge s={ACM_STATUS[c.aws?.status] ?? 'pending'} text={ACM_LABEL[c.aws?.status] ?? 'pedido'} />
+                          : c.hasKey ? <Badge s="succeeded" text="ok" /> : '—'}
+                      {(c.acme?.error || c.aws?.error) && <div className="err" style={{ fontSize: 12 }}>{c.acme?.error || c.aws?.error}</div>}
+                      {c.source === 'acm' && c.aws?.status !== 'issued' && c.aws?.records?.length > 0 && (
+                        <details style={{ fontSize: 12 }}>
+                          <summary>{c.aws.validation === 'manual' || c.aws.error ? t('crie estes registros no DNS') : t('registros de validação (Route 53)')}</summary>
+                          <pre>{c.aws.records.map((r: any) => `${r.name}  ${r.type}  ${r.value}`).join('\n')}</pre>
+                        </details>
+                      )}
                     </td>
                     <td>
                       {canEdit && <div className="actions">
                         {c.source === 'acme' && <button className="small" onClick={issue(c)}>{t('emitir/renovar')}</button>}
+                        {c.source === 'acm' && <button className="small" onClick={issue(c)}>{t('verificar no ACM')}</button>}
                         <button className="small danger" onClick={del(c)}>{t('excluir')}</button>
                       </div>}
                     </td>
@@ -335,6 +359,17 @@ function Certificates({ cluster }: { cluster: any }) {
           { key: 'domains', label: 'Domínios (o DNS deve apontar para o VIP/NLB)', type: 'tokens', placeholder: 'app.example.com www.example.com' }]}
           value={acme} onChange={setAcme} ctx={{}} />
         <button className="primary" onClick={doAcme}>{t('Emitir')}</button>
+      </details>
+      <details className="panel">
+        <summary><b>{t('AWS Certificate Manager (ACM)')}</b></summary>
+        <p className="muted">{t('Certificado público exportável do ACM (inclusive wildcard), validado por DNS. O HAPM cria os registros no Route 53, exporta quando emitido e reexporta a cada renovação automática do ACM. Usa o “Acesso do manager à AWS” deste cluster. Cada emissão/renovação exportável é cobrada pela AWS.')}</p>
+        <Fields rows={[[{ key: 'name', label: 'Nome' }, { key: 'validation', label: 'Validação DNS', type: 'select', default: 'route53',
+            options: [['route53', 'automática no Route 53'], ['manual', 'manual (mostrar os registros)']] }],
+          { key: 'domains', label: 'Domínios (aceita *.dominio)', type: 'tokens', placeholder: 'loja.example.com *.example.com' },
+          [{ key: 'hostedZoneId', label: 'Zona do Route 53 (opcional; vazio = descobrir pelo nome)', placeholder: 'Z0123456789ABC' },
+            { key: 'arn', label: 'ou ARN de um certificado exportável existente', placeholder: 'arn:aws:acm:sa-east-1:...:certificate/...' }]]}
+          value={acm} onChange={setAcm} ctx={{}} />
+        <button className="primary" onClick={doAcm}>{t('Pedir / importar do ACM')}</button>
       </details>
       <details className="panel">
         <summary><b>{t('Enviar certificado (PEM)')}</b></summary>
@@ -492,6 +527,42 @@ function History({ cluster }: { cluster: any }) {
 }
 
 // ------------------------------------------------------------------ configurações
+/** Botão "Testar acesso à AWS": quem o manager é na AWS e o que consegue ler (ACM, Route 53). */
+function AwsAccessTest({ cluster }: { cluster: any }) {
+  const t = useT();
+  const [r, setR] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const test = async () => {
+    setBusy(true);
+    try {
+      setR(await api('POST', `/clusters/${cluster.id}/aws/test`));
+    } catch (e: any) {
+      toast(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const lvl: Record<string, string> = { OK: 'b-ok', WARN: 'b-warn', FAIL: 'b-err' };
+  return (
+    <div className="panel">
+      <div className="chart-head">
+        <h3>{t('Acesso à AWS')}</h3>
+        <button disabled={busy} onClick={test}>{busy ? t('testando...') : t('Testar acesso à AWS')}</button>
+      </div>
+      <p className="muted">{t('Usado para certificados do ACM e validação DNS no Route 53. Salve as configurações antes de testar.')}</p>
+      {r && (
+        <>
+          <p><b>{t('Modo')}:</b> {r.mode}</p>
+          <ul className="checks">
+            {r.checks.map((c: any, i: number) => <li key={i}><span className={`badge ${lvl[c.status]}`}>{c.status}</span> {c.message}</li>)}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Settings({ cluster, onSaved }: { cluster: any; onSaved: () => void }) {
   const t = useT();
   const [form, setForm] = useState<any>({ name: cluster.name, settings: cluster.settings });
@@ -519,6 +590,7 @@ function Settings({ cluster, onSaved }: { cluster: any; onSaved: () => void }) {
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
         {isAdmin ? <div className="actions"><button className="primary" onClick={save}>{t('Salvar')}</button></div> : <p className="muted">{t('Somente ADMIN altera as configurações do cluster.')}</p>}
       </div>
+      {isAdmin && <AwsAccessTest cluster={cluster} />}
       {isAdmin && <ClusterImportExport cluster={cluster} />}
       {isAdmin && <div className="panel">
         <h3>{t('Zona de perigo')}</h3>

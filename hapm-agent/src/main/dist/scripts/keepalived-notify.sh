@@ -40,6 +40,19 @@ resolve_eni() {
 
 ec2() { "$AWS" ec2 "$@" --region "${HAPM_AWS_REGION:-}"; }
 
+# Role opcional só para o failover (HAPM_AWS_ROLE_ARN [+ HAPM_AWS_EXTERNAL_ID]): credenciais temporárias do STS,
+# obtidas com o instance profile do nó. Sem a variável, usa direto o instance profile.
+assume_role() {
+  [ -n "${HAPM_AWS_ROLE_ARN:-}" ] || return 0
+  local out ext=()
+  [ -n "${HAPM_AWS_EXTERNAL_ID:-}" ] && ext=(--external-id "$HAPM_AWS_EXTERNAL_ID")
+  out=$("$AWS" sts assume-role --role-arn "$HAPM_AWS_ROLE_ARN" --role-session-name "hapm-failover-$(hostname -s 2>/dev/null || echo node)" \
+    "${ext[@]}" --duration-seconds 900 --region "${HAPM_AWS_REGION:-}" \
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text 2>&1) || { log "ERRO: assume-role $HAPM_AWS_ROLE_ARN falhou: $out"; return 1; }
+  read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN <<< "$out"
+  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+}
+
 routes() { echo "${HAPM_ROUTE_TABLES:-}" | tr ',' ' '; }
 
 ip_to_int() { local IFS=.; read -r a b c d <<< "$1"; echo $(((a << 24) + (b << 16) + (c << 8) + d)); }
@@ -52,6 +65,7 @@ ip_in_cidr() {
 # ------------------------------------------------------------------ failover (novo MASTER)
 failover() {
   local eni attempt ok rtb
+  assume_role || return 1
   eni=$(resolve_eni) || { log "ERRO: não foi possível descobrir a ENI deste nó"; return 1; }
   for attempt in 1 2 3 4 5; do
     ok=1
@@ -103,6 +117,9 @@ dry() {
 preflight() {
   if [ "${HAPM_MODE:-}" != "aws-eip" ]; then ok "modo ${HAPM_MODE:-?}: nada a verificar"; return 0; fi
   command -v "$AWS" >/dev/null 2>&1 || { fail "AWS CLI não encontrado ($AWS)"; return 1; }
+  if [ -n "${HAPM_AWS_ROLE_ARN:-}" ]; then
+    if assume_role; then ok "role de failover assumida: $HAPM_AWS_ROLE_ARN"; else fail "não foi possível assumir a role $HAPM_AWS_ROLE_ARN (confira a trust policy e sts:AssumeRole no instance profile)"; return 1; fi
+  fi
   [ -n "${HAPM_AWS_REGION:-}" ] || fail "região AWS não configurada"
   local eni info subnet srcdst vpc cidr vpccidr rtb rvpc
   if ! eni=$(resolve_eni) || [ -z "$eni" ]; then fail "não foi possível descobrir a ENI (IMDS inacessível? configure a ENI do nó no HAPM)"; return 1; fi

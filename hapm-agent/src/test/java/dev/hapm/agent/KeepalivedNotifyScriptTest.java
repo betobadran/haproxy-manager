@@ -31,7 +31,7 @@ class KeepalivedNotifyScriptTest {
   /** AWS CLI falso: grava cada chamada e responde conforme a operação. FAKE_DENY=<operação> nega permissão. */
   static final String FAKE_AWS = """
       #!/bin/bash
-      echo "$*" >> "$FAKE_CALLS"
+      echo "$*${AWS_SESSION_TOKEN:+ [sessao=$AWS_SESSION_TOKEN]}" >> "$FAKE_CALLS"
       op="$2"
       if [[ " $* " == *" --dry-run "* ]]; then
         if [[ -n "${FAKE_DENY:-}" && "$op" == "$FAKE_DENY" ]]; then echo "An error occurred (UnauthorizedOperation) when calling the X operation" >&2; exit 254; fi
@@ -43,6 +43,7 @@ class KeepalivedNotifyScriptTest {
         describe-vpcs) echo "10.0.0.0/16" ;;
         describe-route-tables) echo "vpc-111" ;;
         describe-addresses) echo "eipalloc-0abc" ;;
+        assume-role) [[ -n "${FAKE_DENY_ASSUME:-}" ]] && { echo "AccessDenied" >&2; exit 254; }; printf 'ASIAFAKE\tsegredo\ttoken-temporario\n' ;;
         replace-route) [[ -n "${FAKE_NO_ROUTE:-}" ]] && { echo "InvalidRoute.NotFound" >&2; exit 254; } ;;
       esac
       exit 0
@@ -125,6 +126,21 @@ class KeepalivedNotifyScriptTest {
     assertThat(calls()).containsExactly(
         "ec2 assign-private-ip-addresses --network-interface-id eni-0aaa1111bbbb2222c --private-ip-addresses 10.0.1.50 --allow-reassignment --region sa-east-1",
         "ec2 associate-address --allocation-id eipalloc-0abc --network-interface-id eni-0aaa1111bbbb2222c --private-ip-address 10.0.1.50 --allow-reassociation --region sa-east-1");
+  }
+
+  @Test
+  void assumesFailoverRoleWhenConfigured() throws Exception {
+    var env = SAME_SUBNET + "HAPM_AWS_ROLE_ARN=arn:aws:iam::123456789012:role/rede-failover\nHAPM_AWS_EXTERNAL_ID=hapm-123\n";
+    var r = run(env, Map.of(), "INSTANCE", "VI_51", "MASTER", "150");
+    assertThat(r.code()).as(r.out()).isZero();
+    var c = calls();
+    assertThat(c.get(0)).startsWith("sts assume-role --role-arn arn:aws:iam::123456789012:role/rede-failover").contains("--external-id hapm-123");
+    // as chamadas EC2 seguintes usam as credenciais temporárias da role
+    assertThat(c.stream().filter(l -> l.startsWith("ec2 ")).toList()).isNotEmpty().allMatch(l -> l.endsWith("[sessao=token-temporario]"));
+    // preflight acusa trust policy errada
+    var p = run(env, Map.of("FAKE_DENY_ASSUME", "1"), "--preflight");
+    assertThat(p.code()).isNotZero();
+    assertThat(p.out()).contains("não foi possível assumir a role");
   }
 
   @Test

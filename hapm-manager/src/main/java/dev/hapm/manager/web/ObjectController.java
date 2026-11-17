@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/clusters/{cid}")
 public class ObjectController {
+  @org.springframework.beans.factory.annotation.Autowired private dev.hapm.manager.service.AcmService acm;
   private final Store store;
   private final ObjectService objects;
   private final CertService certs;
@@ -73,7 +74,9 @@ public class ObjectController {
   public Map<String, Boolean> issue(@PathVariable String cid, @PathVariable String oid, Principal p) {
     cluster(cid);
     var row = store.getObject(cid, DeployService.CERTIFICATE, oid).orElseThrow(() -> Http.notFound("não encontrado"));
-    if (!"acme".equals(store.fromJson(row.data(), Certificate.class).source())) throw Http.status(HttpStatus.BAD_REQUEST, "certificado não é ACME");
+    var source = store.fromJson(row.data(), Certificate.class).source();
+    if ("acm".equals(source)) return Map.of("started", acm.start(cid, oid, p.getName()));
+    if (!"acme".equals(source)) throw Http.status(HttpStatus.BAD_REQUEST, "certificado não é ACME nem ACM");
     return Map.of("started", certs.issue(cid, oid, p.getName()));
   }
 }

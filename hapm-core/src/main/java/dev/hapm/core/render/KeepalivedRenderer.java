@@ -109,6 +109,11 @@ public final class KeepalivedRenderer {
         L.add("HAPM_ROUTE_TABLES=" + String.join(",", a.routeTableIds()));
         L.add("HAPM_MANAGE_SRC_DST_CHECK=" + (Boolean.FALSE.equals(a.manageSourceDestCheck()) ? "0" : "1"));
       }
+      // role opcional assumida pelo nó só para o failover (ex.: rede em outra conta); senão usa o instance profile
+      if (a.failoverRoleArn() != null && !a.failoverRoleArn().isEmpty()) {
+        L.add("HAPM_AWS_ROLE_ARN=" + a.failoverRoleArn());
+        if (a.failoverExternalId() != null && !a.failoverExternalId().isEmpty()) L.add("HAPM_AWS_EXTERNAL_ID=" + a.failoverExternalId());
+      }
     }
     return String.join("\n", L) + "\n";
   }

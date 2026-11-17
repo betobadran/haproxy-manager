@@ -15,21 +15,27 @@ public record ClusterSettings(
     Acme acme,
     Approval approval,
     Nodes nodes,
-    Logs logs) {
+    Logs logs,
+    AwsAccess awsAccess) {
 
   /** Compatibilidade: configurações sem política de aprovação explícita. */
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null, null, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null, null, null, null);
   }
 
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
                          Approval approval) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, null, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, null, null, null);
   }
 
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
                          Approval approval, Nodes nodes) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, nodes, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, nodes, null, null);
+  }
+
+  public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
+                         Approval approval, Nodes nodes, Logs logs) {
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, nodes, logs, null);
   }
 
   public boolean approvalRequired() {
@@ -85,9 +91,24 @@ public record ClusterSettings(
    */
   public record Aws(String region, String eipAllocationId, String privateVip, String routeVip,
                     @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> routeTableIds,
-                    Boolean manageSourceDestCheck) {
+                    Boolean manageSourceDestCheck, String failoverRoleArn, String failoverExternalId) {
     public Aws(String region, String eipAllocationId, String privateVip) {
-      this(region, eipAllocationId, privateVip, null, null, null);
+      this(region, eipAllocationId, privateVip, null, null, null, null, null);
+    }
+
+    public Aws(String region, String eipAllocationId, String privateVip, String routeVip, List<String> routeTableIds, Boolean manageSourceDestCheck) {
+      this(region, eipAllocationId, privateVip, routeVip, routeTableIds, manageSourceDestCheck, null, null);
+    }
+  }
+
+  /**
+   * Acesso do MANAGER à AWS (certificados ACM, Route 53). Sem roleArn usa a cadeia padrão do SDK (role da EC2/ECS,
+   * IRSA, SSO, variáveis de ambiente); com roleArn assume essa role via STS (outra conta, com ExternalId), em sessões
+   * nomeadas com o usuário do HAPM (rastreáveis no CloudTrail).
+   */
+  public record AwsAccess(String region, String roleArn, String externalId, Integer sessionMinutes) {
+    public boolean assumesRole() {
+      return roleArn != null && !roleArn.isBlank();
     }
   }
 

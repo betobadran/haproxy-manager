@@ -84,7 +84,14 @@ export const clusterSchema: Row[] = [
       { key: 'manageSourceDestCheck', label: 'Desligar o source/dest check das ENIs automaticamente', type: 'checkbox', default: true,
         help: 'IP de overlay: um IP fora do CIDR da VPC; o novo MASTER aponta a rota /32 nessas tabelas para a própria ENI. Os clientes precisam usar essas tabelas (mesma VPC, ou via Transit Gateway/VPN com rota estática).' },
       { key: 'eipAllocationId', label: 'Elastic IP (opcional, acompanha o MASTER)', placeholder: 'eipalloc-...' },
+      [{ key: 'failoverRoleArn', label: 'Role a assumir no failover (opcional)', placeholder: 'arn:aws:iam::123456789012:role/hapm-failover' },
+        { key: 'failoverExternalId', label: 'ExternalId (opcional)' }],
     ] },
+    { key: 'awsAccess', label: 'Acesso do manager à AWS (certificados ACM, Route 53)', type: 'group', fields: [
+      [{ key: 'region', label: 'Região', placeholder: 'sa-east-1' }, { key: 'sessionMinutes', label: 'Duração da sessão (min)', type: 'number', default: 60 }],
+      [{ key: 'roleArn', label: 'Role a assumir (vazio = credenciais do próprio manager)', placeholder: 'arn:aws:iam::123456789012:role/hapm-manager' },
+        { key: 'externalId', label: 'ExternalId (recomendado para outra conta)' }],
+    ], help: 'Sem role, o manager usa a cadeia padrão do SDK (role da EC2/ECS, IRSA, SSO): nenhuma chave fica no HAPM. Com role, usa sts:AssumeRole com sessão hapm-<usuário>, visível no CloudTrail.' },
     { key: 'logs', label: 'Logs de acesso', type: 'group', fields: [
       [{ key: 'enabled', label: 'Enviar logs de acesso (logfmt, syslog RFC 5424)', type: 'checkbox' },
         { key: 'userAgent', label: 'Incluir User-Agent', type: 'checkbox', default: true }],

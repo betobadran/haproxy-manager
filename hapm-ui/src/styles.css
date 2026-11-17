@@ -143,3 +143,4 @@ table.logs td { font-size: 12.5px; vertical-align: top; }
 table.logs td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
 table.logs pre { white-space: pre-wrap; word-break: break-all; max-height: none; }
 .logs-wrap { overflow-x: auto; }
+ul.checks { list-style: none; padding: 0; margin: 0; } ul.checks li { margin: 4px 0; }

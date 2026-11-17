@@ -168,7 +168,9 @@ public class NotificationService {
             ? "Certificado " + cert.name() + " EXPIRADO (cluster " + c.name() + ")"
             : "Certificado " + cert.name() + " expira em " + days + " dia(s) (cluster " + c.name() + ")";
         var msg = (expired ? "Expirou em " : "Expira em ") + cert.meta().notAfter() + ". Domínios: " + domains + ". Origem: "
-            + ("acme".equals(cert.source()) ? "ACME (renovação automática: verifique se ela está falhando)" : "upload manual (envie o novo certificado e publique)") + ".";
+            + ("acme".equals(cert.source()) ? "ACME (renovação automática: verifique se ela está falhando)"
+                : "acm".equals(cert.source()) ? "AWS ACM (o ACM renova e o HAPM reexporta: verifique a validação DNS no ACM e o acesso à AWS)"
+                : "upload manual (envie o novo certificado e publique)") + ".";
         var data = new LinkedHashMap<String, Object>();
         data.put("cluster", c.name());
         data.put("certificate", cert.name());

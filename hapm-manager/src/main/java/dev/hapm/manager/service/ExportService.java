@@ -61,7 +61,7 @@ public class ExportService {
               h.sslMinVer(), h.defaultCertificate(), h.timeouts(), h.globalExtra(), h.defaultsExtra()),
           k == null ? null : new ClusterSettings.Keepalived(k.iface(), k.routerId(), k.vips(), null, k.advertInt(), k.unicast(), k.preempt(),
               k.checkInterval(), k.checkFall(), k.checkRise()),
-          s.aws(), s.acme(), s.approval(), s.nodes());
+          s.aws(), s.acme(), s.approval(), s.nodes(), s.logs(), s.awsAccess());
     }
     var certs = store.listObjects(clusterId, DeployService.CERTIFICATE, Certificate.class).stream()
         .map(x -> secrets ? x : x.withoutPem()).toList();
@@ -190,7 +190,8 @@ public class ExportService {
   static ClusterSettings mergeSettings(ClusterSettings cur, ClusterSettings in) {
     var h = in.haproxy() == null ? cur.haproxy() : mergeHaproxy(cur.haproxy(), in.haproxy());
     return new ClusterSettings(nz(in.mode(), cur.mode()), nz(in.rollout(), cur.rollout()), nz(in.autoDeployOnCertRenew(), cur.autoDeployOnCertRenew()), h,
-        nz(in.keepalived(), cur.keepalived()), nz(in.aws(), cur.aws()), nz(in.acme(), cur.acme()), nz(in.approval(), cur.approval()), nz(in.nodes(), cur.nodes()));
+        nz(in.keepalived(), cur.keepalived()), nz(in.aws(), cur.aws()), nz(in.acme(), cur.acme()), nz(in.approval(), cur.approval()), nz(in.nodes(), cur.nodes()),
+        nz(in.logs(), cur.logs()), nz(in.awsAccess(), cur.awsAccess()));
   }
 
   static ClusterSettings.Haproxy mergeHaproxy(ClusterSettings.Haproxy c, ClusterSettings.Haproxy i) {
