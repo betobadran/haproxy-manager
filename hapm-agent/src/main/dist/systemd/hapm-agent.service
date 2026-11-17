@@ -1,0 +1,21 @@
+[Unit]
+Description=HAPM agent (gerência de HAProxy/Keepalived)
+After=network-online.target haproxy.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/hapm/agent.env
+Environment="JAVA_OPTS=-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xss512k"
+ExecStartPre=/usr/bin/java $JAVA_OPTS -jar /opt/hapm-agent/hapm-agent.jar --bootstrap
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/hapm-agent/hapm-agent.jar
+Restart=always
+RestartSec=3
+# precisa de root para recarregar haproxy/keepalived e gravar em /etc
+User=root
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.2</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>dev.hapm</groupId>
+  <artifactId>hapm-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>HAPM - HAProxy HA Manager</name>
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <description>Gerência de HAProxy + Keepalived em alta disponibilidade (on-premise e AWS)</description>
+
+  <modules>
+    <module>hapm-core</module>
+    <module>hapm-ui</module>
+    <module>hapm-manager</module>
+    <module>hapm-agent</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <acme4j.version>5.1.0</acme4j.version>
+    <!-- Node/npm usados SOMENTE no build da UI (frontend-maven-plugin). Em rede corporativa,
+         aponte node.download.root / npm.registry para o Nexus/Artifactory interno. -->
+    <node.version>v22.23.5</node.version>
+    <node.download.root>https://nodejs.org/dist/</node.download.root>
+    <npm.registry>https://registry.npmjs.org/</npm.registry>
+    <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>dev.hapm</groupId>
+        <artifactId>hapm-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.hapm</groupId>
+        <artifactId>hapm-ui</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.shredzone.acme4j</groupId>
+        <artifactId>acme4j-client</artifactId>
+        <version>${acme4j.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+</project>

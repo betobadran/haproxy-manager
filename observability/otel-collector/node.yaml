@@ -1,0 +1,61 @@
+# OTel Collector que roda EM CADA nó HAProxy (edge).
+# Coleta: exporter Prometheus nativo do HAProxy, métricas do hapm-agent e métricas do host,
+# carimba hapm.cluster / hapm.node e envia via OTLP para o collector gateway.
+# Variáveis: HAPM_CLUSTER, HAPM_NODE, OTEL_GATEWAY_ENDPOINT (ex.: otel-gw.interno:4317)
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: haproxy
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["127.0.0.1:${env:HAPM_STATS_PORT:-8405}"]
+        - job_name: hapm-agent
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["127.0.0.1:${env:HAPM_METRICS_PORT:-9101}"]
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: { enabled: true }
+      memory:
+        metrics:
+          system.memory.utilization: { enabled: true }
+      load: {}
+      network: {}
+      filesystem: {}
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+  resource:
+    attributes:
+      - { key: hapm.cluster, value: "${env:HAPM_CLUSTER}", action: upsert }
+      - { key: hapm.node, value: "${env:HAPM_NODE}", action: upsert }
+  batch:
+    timeout: 10s
+
+exporters:
+  otlp:
+    endpoint: "${env:OTEL_GATEWAY_ENDPOINT}"
+    tls:
+      # em produção use TLS (ca_file / cert_file / key_file) entre edge e gateway
+      insecure: ${env:OTEL_GATEWAY_INSECURE:-true}
+    sending_queue:
+      enabled: true
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+
+service:
+  telemetry:
+    metrics:
+      level: basic
+  pipelines:
+    metrics:
+      receivers: [prometheus, hostmetrics]
+      processors: [memory_limiter, resource, batch]
+      exporters: [otlp]

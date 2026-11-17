@@ -1,5 +1,10 @@
 node_modules/
+target/
 data/
 *.db
+*.mv.db
 .terraform/
 *.tfstate*
+hapm-ui/node/
+hapm-ui/dist/
+.env

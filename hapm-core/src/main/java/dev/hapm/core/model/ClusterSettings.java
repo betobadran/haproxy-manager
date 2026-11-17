@@ -1,0 +1,90 @@
+package dev.hapm.core.model;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
+
+/** Configurações de um cluster. Campos nulos na entrada recebem padrão no {@code Normalizer}. */
+public record ClusterSettings(
+    String mode,
+    String rollout,
+    Boolean autoDeployOnCertRenew,
+    Haproxy haproxy,
+    Keepalived keepalived,
+    Aws aws,
+    Acme acme,
+    Approval approval) {
+
+  /** Compatibilidade: configurações sem política de aprovação explícita. */
+  public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme) {
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null);
+  }
+
+  public boolean approvalRequired() {
+    return approval != null && Boolean.TRUE.equals(approval.required());
+  }
+
+  public static final String ONPREM_KEEPALIVED = "onprem-keepalived";
+  public static final String AWS_NLB = "aws-nlb";
+  public static final String AWS_EIP = "aws-eip";
+
+  public boolean usesKeepalived() {
+    return ONPREM_KEEPALIVED.equals(mode) || AWS_EIP.equals(mode);
+  }
+
+  public record Haproxy(
+      Integer maxconn,
+      Integer nbthread,
+      String log,
+      String user,
+      String statsSocket,
+      Integer statsPort,
+      String statsUser,
+      String statsPassword,
+      String sslMinVer,
+      String defaultCertificate,
+      Timeouts timeouts,
+      String globalExtra,
+      String defaultsExtra) {}
+
+  public record Timeouts(
+      String connect, String client, String server, String httpRequest, String httpKeepAlive, String queue, String tunnel) {}
+
+  public record Keepalived(
+      @JsonProperty("interface") String iface,
+      Integer routerId,
+      @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> vips,
+      String authPass,
+      Integer advertInt,
+      Boolean unicast,
+      Boolean preempt,
+      Integer checkInterval,
+      Integer checkFall,
+      Integer checkRise) {}
+
+  /**
+   * Failover de IP na AWS (modo aws-eip). Combine conforme a topologia:
+   * <ul>
+   *   <li>privateVip: IP privado secundário movido entre ENIs — nós na MESMA subnet;</li>
+   *   <li>routeVip + routeTableIds: IP de "overlay" (fora do CIDR da VPC) cuja rota /32 aponta para a ENI do MASTER —
+   *       funciona com nós em subnets/AZs DIFERENTES (exige source/dest check desligado nas ENIs);</li>
+   *   <li>eipAllocationId: Elastic IP público que acompanha o MASTER (entre AZs também).</li>
+   * </ul>
+   */
+  public record Aws(String region, String eipAllocationId, String privateVip, String routeVip,
+                    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> routeTableIds,
+                    Boolean manageSourceDestCheck) {
+    public Aws(String region, String eipAllocationId, String privateVip) {
+      this(region, eipAllocationId, privateVip, null, null, null);
+    }
+  }
+
+  /** backend = host:porta onde o HAProxy alcança o manager para responder o desafio HTTP-01. */
+  public record Acme(String email, String backend) {}
+
+  /**
+   * Governança de publicação: com {@code required}, mudanças só vão para os nós depois que um usuário com
+   * papel APPROVER aprovar o pedido. {@code allowSelfApproval=false} exige outra pessoa (quatro olhos).
+   */
+  public record Approval(Boolean required, Boolean allowSelfApproval) {}
+}

@@ -1,0 +1,8 @@
+name                     = "hapm-prod"
+vpc_id                   = "vpc-0123456789abcdef0"
+instance_subnet_ids      = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
+nlb_subnet_ids           = ["subnet-pub-a", "subnet-pub-b", "subnet-pub-c"]
+manager_url              = "https://hapm.interno.exemplo.com"
+join_token_ssm_parameter = "/hapm/prod/join-token"
+bundle_s3_uri            = "s3://meu-bucket-artefatos/hapm/hapm-bundle-0.1.0.tar.gz"
+otel_gateway_endpoint    = "otel-gw.interno.exemplo.com:4317"

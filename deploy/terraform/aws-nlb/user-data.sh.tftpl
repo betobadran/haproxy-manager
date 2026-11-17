@@ -1,0 +1,34 @@
+#!/bin/bash
+# Bootstrap de um nó HAProxy do HAPM na AWS (Ubuntu 24.04), via cloud-init.
+# Usa o MESMO instalador do on-premise (deploy/bash/install-node.sh, dentro do bundle).
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive AWS_DEFAULT_REGION="${region}"
+apt-get update
+apt-get install -y curl unzip ca-certificates
+snap install aws-cli --classic || true
+
+# identidade do nó = instance-id (IMDSv2)
+IMDS_TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md() { curl -fsS -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" "http://169.254.169.254/latest/meta-data/$1"; }
+NODE_NAME=$(md instance-id)
+
+# bundle gerado por deploy/bash/make-bundle.sh e publicado no S3
+mkdir -p /opt/hapm-bundle
+aws s3 cp "${bundle_s3_uri}" /tmp/hapm-bundle.tar.gz
+tar -C /opt/hapm-bundle --strip-components=1 -xzf /tmp/hapm-bundle.tar.gz
+(cd /opt/hapm-bundle && sha256sum --quiet -c SHA256SUMS)
+
+TOKEN_FILE=$(mktemp)
+aws ssm get-parameter --with-decryption --name "${join_token_parameter}" --query Parameter.Value --output text > "$TOKEN_FILE"
+
+OTEL_ARGS=()
+if [ -n "${otel_gateway_endpoint}" ]; then
+  OTEL_ARGS=(--otel-gateway "${otel_gateway_endpoint}" --cluster-label "${cluster_label}" --otelcol-version "${otelcol_version}")
+fi
+/opt/hapm-bundle/install-node.sh \
+  --manager-url "${manager_url}" \
+  --join-token-file "$TOKEN_FILE" \
+  --node-name "$NODE_NAME" \
+  --no-keepalived \
+  "$${OTEL_ARGS[@]}"
+shred -u "$TOKEN_FILE"
