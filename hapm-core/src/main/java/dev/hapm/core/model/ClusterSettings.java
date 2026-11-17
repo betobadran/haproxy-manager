@@ -13,11 +13,17 @@ public record ClusterSettings(
     Keepalived keepalived,
     Aws aws,
     Acme acme,
-    Approval approval) {
+    Approval approval,
+    Nodes nodes) {
 
   /** Compatibilidade: configurações sem política de aprovação explícita. */
   public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme) {
-    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null);
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, null, null);
+  }
+
+  public ClusterSettings(String mode, String rollout, Boolean autoDeployOnCertRenew, Haproxy haproxy, Keepalived keepalived, Aws aws, Acme acme,
+                         Approval approval) {
+    this(mode, rollout, autoDeployOnCertRenew, haproxy, keepalived, aws, acme, approval, null);
   }
 
   public boolean approvalRequired() {
@@ -87,4 +93,7 @@ public record ClusterSettings(
    * papel APPROVER aprovar o pedido. {@code allowSelfApproval=false} exige outra pessoa (quatro olhos).
    */
   public record Approval(Boolean required, Boolean allowSelfApproval) {}
+
+  /** Ciclo de vida dos nós. autoRemoveOfflineMinutes: remove do cluster nós sem heartbeat há N minutos (null/0 = nunca). */
+  public record Nodes(Integer autoRemoveOfflineMinutes) {}
 }

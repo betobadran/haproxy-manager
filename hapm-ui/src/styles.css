@@ -134,5 +134,6 @@ a.btn.primary { background: var(--accent); border-color: var(--accent); color: v
 .side a .count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--err); color: #fff; font-size: 11px; font-weight: 700; text-align: center; }
 .banner { border: 1px solid currentColor; border-left-width: 4px; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; background: var(--panel); }
 .banner ul { margin: 6px 0; padding-left: 18px; color: var(--text); }
-.banner-err { color: var(--err); } .banner-warn { color: var(--warn); }
+.banner-err { color: var(--err); } .banner-warn { color: var(--warn); } .banner-ok { color: var(--ok); }
+.banner > div { color: var(--text); margin-top: 6px; } h4 { margin: 18px 0 8px; }
 tr.muted td { opacity: .7; }

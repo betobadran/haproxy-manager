@@ -128,6 +128,23 @@ public class ClusterController {
   }
 
   // ------------------------------------------------------------------ nós
+  /** Linha do tempo: failover, nós offline/online, split-brain, servidores DOWN, publicações com falha. */
+  @GetMapping("/{cid}/events")
+  public List<Map<String, Object>> events(@PathVariable String cid, @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int limit) {
+    store.getCluster(cid).orElseThrow(() -> Http.notFound("cluster não encontrado"));
+    return store.listEvents(cid, Math.max(1, Math.min(limit, 500))).stream().map(e -> {
+      var m = new LinkedHashMap<String, Object>();
+      m.put("id", e.id());
+      m.put("ts", e.ts());
+      m.put("node", e.nodeName());
+      m.put("subject", e.subject());
+      m.put("kind", e.kind());
+      m.put("detail", e.detail());
+      m.put("data", e.data() == null ? null : store.fromJson(e.data(), Map.class));
+      return (Map<String, Object>) m;
+    }).toList();
+  }
+
   @GetMapping("/{cid}/nodes")
   public List<Map<String, Object>> nodes(@PathVariable String cid) {
     var c = cluster(cid);

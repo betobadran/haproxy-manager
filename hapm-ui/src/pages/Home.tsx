@@ -4,11 +4,12 @@ import { Fields, withDefaults } from '../form';
 import { clusterSchema } from '../schemas';
 import { Badge, useAction, useLoad, useToast } from '../ui';
 import { usePerm } from '../session';
+import { ImportNewCluster } from './ImportExport';
 import { useT } from '../prefs';
 
 export function Home() {
   const t = useT();
-  const { data: clusters } = useLoad<any[]>(() => api('GET', '/clusters'), [], 10000);
+  const { data: clusters, reload } = useLoad<any[]>(() => api('GET', '/clusters'), [], 10000);
   const [form, setForm] = useState<any>({ settings: {} });
   const run = useAction();
   const toast = useToast();
@@ -45,6 +46,7 @@ export function Home() {
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
         <button className="primary" onClick={create}>{t('Criar cluster')}</button>
       </details>}
+      {isAdmin && <ImportNewCluster onDone={reload} />}
     </>
   );
 }

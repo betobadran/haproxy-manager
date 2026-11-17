@@ -10,12 +10,29 @@ public final class AgentProtocol {
 
   public record Heartbeat(
       String name, String address, String agentVersion, String haproxyVersion, String vrrpState, Integer appliedVersion, LastApply lastApply,
-      Traffic traffic, AwsCheck aws) {
+      Traffic traffic, AwsCheck aws, RuntimeReport runtime, Boolean leaving) {
 
     public Heartbeat(String name, String address, String agentVersion, String haproxyVersion, String vrrpState, Integer appliedVersion, LastApply lastApply) {
-      this(name, address, agentVersion, haproxyVersion, vrrpState, appliedVersion, lastApply, null, null);
+      this(name, address, agentVersion, haproxyVersion, vrrpState, appliedVersion, lastApply, null, null, null, null);
+    }
+
+    public Heartbeat(String name, String address, String agentVersion, String haproxyVersion, String vrrpState, Integer appliedVersion, LastApply lastApply,
+                     Traffic traffic, AwsCheck aws) {
+      this(name, address, agentVersion, haproxyVersion, vrrpState, appliedVersion, lastApply, traffic, aws, null, null);
     }
   }
+
+  /**
+   * Estado operacional desejado de um servidor, aplicado pelo agente via runtime API do HAProxy (sem publicar).
+   * state: "drain" | "maint" | null (= pronto); weight: null = peso da configuração.
+   */
+  public record ServerOverride(String backend, String server, String state, Integer weight) {}
+
+  /** adminSocket: socket "level admin" do HAProxy; servers: o conjunto COMPLETO de overrides do cluster. */
+  public record Runtime(String adminSocket, java.util.List<ServerOverride> servers) {}
+
+  /** Resultado da última reconciliação de overrides no nó. */
+  public record RuntimeReport(boolean ok, String error, String at, int commands) {}
 
   /**
    * Amostra dos contadores do HAProxy (lidos do exporter Prometheus local). Contadores são acumulados;
@@ -42,5 +59,9 @@ public final class AgentProtocol {
     }
   }
 
-  public record HeartbeatResponse(Desired desired, Integer pollIntervalSec) {}
+  public record HeartbeatResponse(Desired desired, Integer pollIntervalSec, Runtime runtime) {
+    public HeartbeatResponse(Desired desired, Integer pollIntervalSec) {
+      this(desired, pollIntervalSec, null);
+    }
+  }
 }

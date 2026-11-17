@@ -2,6 +2,7 @@ package dev.hapm.manager.web;
 
 import dev.hapm.core.model.AgentProtocol;
 import dev.hapm.core.model.AgentProtocol.Heartbeat;
+import dev.hapm.core.model.AgentProtocol.Desired;
 import dev.hapm.core.model.AgentProtocol.HeartbeatResponse;
 import dev.hapm.core.model.AgentProtocol.LastApply;
 import dev.hapm.core.model.Bundle;
@@ -31,11 +32,16 @@ public class AgentController {
   private final Store store;
   private final DeployService deploy;
   private final dev.hapm.manager.service.MetricsService metrics;
+  private final dev.hapm.manager.service.OpsMonitor ops;
+  private final dev.hapm.manager.service.ServerOpsService serverOps;
 
-  public AgentController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics) {
+  public AgentController(Store store, DeployService deploy, dev.hapm.manager.service.MetricsService metrics, dev.hapm.manager.service.OpsMonitor ops,
+                         dev.hapm.manager.service.ServerOpsService serverOps) {
+    this.serverOps = serverOps;
     this.store = store;
     this.deploy = deploy;
     this.metrics = metrics;
+    this.ops = ops;
   }
 
   /** Token de join "clusterId.segredo". */
@@ -63,11 +69,21 @@ public class AgentController {
         b.vrrpState() != null && VRRP.contains(b.vrrpState()) ? b.vrrpState() : null,
         b.appliedVersion() == null ? 0 : b.appliedVersion(),
         la == null ? null : new LastApply(la.version(), Boolean.TRUE.equals(la.ok()), cut(la.error(), 4000), cut(la.at(), 40)));
+    var before = store.getNodeByName(cluster.id(), hb.name());
+    if (Boolean.TRUE.equals(b.leaving())) {
+      // scale-in (AWS): a instância está sendo encerrada; remove o nó e não registra de novo
+      before.ifPresent(n -> ops.onNodeLeft(cluster, n, "instância encerrada pelo Auto Scaling (lifecycle hook)"));
+      return new HeartbeatResponse(Desired.of(null), 30, null);
+    }
     var node = store.upsertHeartbeat(cluster.id(), hb);
+    ops.onHeartbeat(cluster, before, node, b.traffic());
     metrics.record(cluster.id(), node.name(), b.traffic());
     metrics.recordAws(cluster.id(), node.name(), b.aws());
     deploy.evaluate(cluster.id());
-    return new HeartbeatResponse(deploy.desiredFor(cluster.id(), store.getNode(node.id()).orElseThrow()), 5);
+    var rt = b.runtime();
+    serverOps.report(cluster.id(), node.name(), rt == null ? null
+        : new AgentProtocol.RuntimeReport(rt.ok(), cut(rt.error(), 2000), cut(rt.at(), 40), rt.commands()));
+    return new HeartbeatResponse(deploy.desiredFor(cluster.id(), store.getNode(node.id()).orElseThrow()), 5, serverOps.runtimeFor(cluster));
   }
 
   @GetMapping("/bundle/{version}")

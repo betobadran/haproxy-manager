@@ -37,9 +37,12 @@ public class DeployService {
   private final Store store;
   private final HapmProperties props;
 
-  public DeployService(Store store, HapmProperties props) {
+  private final org.springframework.context.ApplicationEventPublisher events;
+
+  public DeployService(Store store, HapmProperties props, org.springframework.context.ApplicationEventPublisher events) {
     this.store = store;
     this.props = props;
+    this.events = events;
   }
 
   public boolean isOnline(NodeRow n) {
@@ -165,6 +168,7 @@ public class DeployService {
       var error = failed.get().name() + ": " + (failed.get().lastApply().error() == null ? "erro desconhecido" : failed.get().lastApply().error());
       store.setDeploymentStatus(dep.id(), "failed", error);
       store.audit(null, clusterId, "deployment.failed", "v" + dep.version(), Map.of("error", error));
+      events.publishEvent(new OpsMonitor.DeploymentFailed(clusterId, dep.version(), error));
       log.warn("deployment v{} do cluster {} falhou; nós voltarão para a última versão boa: {}", dep.version(), clusterId, error);
     } else if (online.stream().allMatch(n -> n.appliedVersion() == dep.version())) {
       store.setDeploymentStatus(dep.id(), "succeeded", online.isEmpty() ? "nenhum nó online; será aplicado quando os nós conectarem" : null);
@@ -173,6 +177,7 @@ public class DeployService {
       var stuck = online.stream().filter(n -> n.appliedVersion() != dep.version()).map(NodeRow::name).toList();
       store.setDeploymentStatus(dep.id(), "failed", "timeout aguardando: " + String.join(", ", stuck));
       store.audit(null, clusterId, "deployment.failed", "v" + dep.version(), Map.of("error", "timeout", "stuck", stuck));
+      events.publishEvent(new OpsMonitor.DeploymentFailed(clusterId, dep.version(), "timeout aguardando: " + String.join(", ", stuck)));
     }
     return store.getDeployment(clusterId, dep.id());
   }

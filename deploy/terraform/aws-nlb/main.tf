@@ -80,6 +80,8 @@ resource "aws_iam_role_policy" "nodes" {
         Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${trimprefix(var.join_token_ssm_parameter, "/")}"
       },
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = local.bundle_arn },
+      # o agente conclui o lifecycle hook de término depois que o manager remove o nó
+      { Effect = "Allow", Action = ["autoscaling:CompleteLifecycleAction"], Resource = aws_autoscaling_group.nodes.arn },
     ]
   })
 }
@@ -108,6 +110,8 @@ resource "aws_launch_template" "nodes" {
     otelcol_version       = var.otelcol_version
     cluster_label         = var.cluster_label
     region                = data.aws_region.current.name
+    asg_name              = "${var.name}-haproxy"
+    lifecycle_hook_name   = "${var.name}-hapm-leave"
   }))
   tag_specifications {
     resource_type = "instance"
@@ -147,6 +151,16 @@ resource "aws_autoscaling_group" "nodes" {
       propagate_at_launch = true
     }
   }
+}
+
+# Scale-in: a instância fica em Terminating:Wait até o agente avisar o manager (que remove o nó) e concluir o hook,
+# ou até o timeout. O NLB já está drenando as conexões nesse intervalo (deregistration delay).
+resource "aws_autoscaling_lifecycle_hook" "leave" {
+  name                   = "${var.name}-hapm-leave"
+  autoscaling_group_name = aws_autoscaling_group.nodes.name
+  lifecycle_transition   = "autoscaling:EC2_INSTANCE_TERMINATING"
+  heartbeat_timeout      = var.lifecycle_hook_timeout
+  default_result         = "CONTINUE"
 }
 
 # ------------------------------------------------------------------ NLB

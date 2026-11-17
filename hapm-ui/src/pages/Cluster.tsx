@@ -5,8 +5,9 @@ import { backendSchema, clusterSchema, frontendSchema } from '../schemas';
 import { Badge, daysLeft, useAction, useLoad, useToast } from '../ui';
 import { usePerm } from '../session';
 import { useFmt, useT, useTs } from '../prefs';
-import { ClusterAlerts } from './Alerts';
+import { ClusterAlerts, Timeline } from './Alerts';
 import { MetricsTab } from './Metrics';
+import { ClusterImportExport } from './ImportExport';
 
 const TABS: [string, string][] = [
   ['', 'Visão geral'], ['metrics', 'Métricas'], ['frontends', 'Listeners'], ['backends', 'Backends'], ['certificates', 'Certificados'],
@@ -174,6 +175,7 @@ function Overview({ cluster }: { cluster: any }) {
           </table>
         ) : <p className="muted">{t('Nenhum nó registrado. Instale o agente nos servidores HAProxy (instruções abaixo).')}</p>}
       </div>
+      <Timeline cid={cluster.id} />
       {isAdmin && <details className="panel" open={!nodes.length}>
         <summary><b>{t('Adicionar nós (instalar o agente)')}</b></summary>
         <p>{t('Com o bundle de instalação (deploy/bash), em cada servidor:')}</p>
@@ -515,6 +517,7 @@ function Settings({ cluster, onSaved }: { cluster: any; onSaved: () => void }) {
         <Fields rows={clusterSchema} value={form} onChange={setForm} ctx={{}} />
         {isAdmin ? <div className="actions"><button className="primary" onClick={save}>{t('Salvar')}</button></div> : <p className="muted">{t('Somente ADMIN altera as configurações do cluster.')}</p>}
       </div>
+      {isAdmin && <ClusterImportExport cluster={cluster} />}
       {isAdmin && <div className="panel">
         <h3>{t('Zona de perigo')}</h3>
         <div className="actions">

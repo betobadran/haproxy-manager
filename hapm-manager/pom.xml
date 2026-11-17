@@ -68,6 +68,11 @@
       <scope>runtime</scope>
     </dependency>
     <!-- alertas por e-mail (SMTP configurado pela tela) -->
+    <!-- exportar/importar clusters em YAML -->
+    <dependency>
+      <groupId>tools.jackson.dataformat</groupId>
+      <artifactId>jackson-dataformat-yaml</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-mail</artifactId>

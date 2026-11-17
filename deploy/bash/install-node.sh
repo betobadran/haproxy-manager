@@ -21,6 +21,8 @@ Opções:
   --interface IF             interface do VRRP/VIP (padrão: rota padrão)
   --address IP               IP do nó para o VRRP unicast (padrão: IPv4 da interface)
   --no-keepalived            não instala o keepalived (topologia aws-nlb)
+  --aws-lifecycle            AWS Auto Scaling: no scale-in o agente avisa o manager, que remove o nó
+  --asg-hook NOME:ASG        (com --aws-lifecycle) conclui o lifecycle hook NOME do ASG ao sair, sem esperar o timeout
   --vrrp-peers IP,IP         libera VRRP (protocolo 112) desses IPs no firewalld, se ativo
   --otel-gateway HOST:PORTA  instala o OTel Collector e envia métricas OTLP para o gateway
   --cluster-label NOME       label hapm_cluster das métricas (padrão: hapm)
@@ -32,7 +34,7 @@ Opções:
 USAGE
 }
 
-MANAGER_URL='' TOKEN_FILE='' NODE_NAME='' IFACE='' ADDRESS='' KEEPALIVED=1 VRRP_PEERS='' OTEL_GW='' CLUSTER_LABEL=hapm
+AWS_LIFECYCLE=0 ASG_HOOK='' MANAGER_URL='' TOKEN_FILE='' NODE_NAME='' IFACE='' ADDRESS='' KEEPALIVED=1 VRRP_PEERS='' OTEL_GW='' CLUSTER_LABEL=hapm
 OTEL_PKG='' OTEL_VERSION=0.114.0 START=1
 while (($#)); do
   case $1 in
@@ -42,6 +44,8 @@ while (($#)); do
     --interface) IFACE=$2; shift 2 ;;
     --address) ADDRESS=$2; shift 2 ;;
     --no-keepalived) KEEPALIVED=0; shift ;;
+    --aws-lifecycle) AWS_LIFECYCLE=1; shift ;;
+    --asg-hook) ASG_HOOK=$2; shift 2 ;;
     --vrrp-peers) VRRP_PEERS=$2; shift 2 ;;
     --otel-gateway) OTEL_GW=$2; shift 2 ;;
     --cluster-label) CLUSTER_LABEL=$2; shift 2 ;;
@@ -129,6 +133,13 @@ copy_if_changed "$B/systemd/hapm-agent.service" /etc/systemd/system/hapm-agent.s
   echo 'HAPM_KEEPALIVED_RELOAD_COMMAND=systemctl reload-or-restart keepalived'
   echo 'HAPM_METRICS_HOST=127.0.0.1'
   echo 'HAPM_METRICS_PORT=9101'
+  if ((AWS_LIFECYCLE)); then
+    echo 'HAPM_AWS_LIFECYCLE=1'
+    if [[ -n $ASG_HOOK ]]; then
+      echo "HAPM_ASG_HOOK_NAME=${ASG_HOOK%%:*}"
+      echo "HAPM_ASG_NAME=${ASG_HOOK#*:}"
+    fi
+  fi
 } | write_if_changed /etc/hapm/agent.env 0600 && agent_changed=1
 
 # release bootstrap: config mínima para o HAProxy subir antes da primeira publicação

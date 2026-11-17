@@ -210,14 +210,30 @@ class EndToEndTest {
     var d3Id = d3.body().get("id").asLong();
     waitFor(() -> "succeeded".equals(depStatus(cid, d3Id)), 30_000, () -> "v3 aplicada");
 
+    // runtime API: manutenção sem publicar -> 503; continua valendo após uma publicação; "ready" volta ao normal
+    assertThat(call("PUT", "/api/clusters/" + cid + "/runtime/servers/app/nao-existe", Map.of("state", "maint")).status()).isEqualTo(400);
+    var m = call("PUT", "/api/clusters/" + cid + "/runtime/servers/app/s1", Map.of("state", "maint", "reason", "janela de manutenção"));
+    assertThat(m.status()).as(m.text()).isEqualTo(200);
+    waitFor(() -> uncheckedStatus("http://127.0.0.1:" + fePort + "/ok") == 503, 15_000, () -> "s1 em manutenção");
+    var d4 = call("POST", "/api/clusters/" + cid + "/deployments", Map.of("note", "publicação com servidor em manutenção"));
+    var d4Id = d4.body().get("id").asLong();
+    waitFor(() -> "succeeded".equals(depStatus(cid, d4Id)), 30_000, () -> "v4 aplicada");
+    Thread.sleep(1500);
+    assertThat(uncheckedStatus("http://127.0.0.1:" + fePort + "/ok")).isEqualTo(503);
+    assertThat(call("GET", "/api/clusters/" + cid + "/runtime", null).body().get("nodes").get("lb1").get("ok").asBoolean()).isTrue();
+    call("PUT", "/api/clusters/" + cid + "/runtime/servers/app/s1", Map.of("state", "ready"));
+    waitFor(() -> uncheckedStatus("http://127.0.0.1:" + fePort + "/ok") == 200, 15_000, () -> "s1 de volta");
+    var timeline = call("GET", "/api/clusters/" + cid + "/events?limit=100", null).body().valueStream().map(e -> e.get("kind").asString()).toList();
+    assertThat(timeline).contains("node-joined", "deploy-failed", "server-state");
+
     // métricas: agente, HAProxy e manager
-    assertThat(get("http://127.0.0.1:" + metricsPort + "/metrics").body()).contains("hapm_config_applied_version 3").contains("hapm_haproxy_up 1");
+    assertThat(get("http://127.0.0.1:" + metricsPort + "/metrics").body()).contains("hapm_config_applied_version 4").contains("hapm_haproxy_up 1");
     assertThat(get("http://127.0.0.1:" + statsPort + "/metrics").body()).contains("haproxy_frontend_http_requests_total{proxy=\"web\"}");
-    assertThat(get("http://127.0.0.1:" + port + "/metrics").body()).contains("hapm_node_applied_version{hapm_cluster=\"e2e\",hapm_node=\"lb1\"} 3");
+    assertThat(get("http://127.0.0.1:" + port + "/metrics").body()).contains("hapm_node_applied_version{hapm_cluster=\"e2e\",hapm_node=\"lb1\"} 4");
 
     // auditoria
     var actions = call("GET", "/api/audit", null).body().valueStream().map(a -> a.get("action").asString()).toList();
-    assertThat(actions).contains("deployment.create", "deployment.failed", "deployment.succeeded", "frontend.update");
+    assertThat(actions).contains("deployment.create", "deployment.failed", "deployment.succeeded", "frontend.update", "server.runtime");
   }
 
   int uncheckedStatus(String url) {

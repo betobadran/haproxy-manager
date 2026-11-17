@@ -85,6 +85,9 @@ export const clusterSchema: Row[] = [
         help: 'IP de overlay: um IP fora do CIDR da VPC; o novo MASTER aponta a rota /32 nessas tabelas para a própria ENI. Os clientes precisam usar essas tabelas (mesma VPC, ou via Transit Gateway/VPN com rota estática).' },
       { key: 'eipAllocationId', label: 'Elastic IP (opcional, acompanha o MASTER)', placeholder: 'eipalloc-...' },
     ] },
+    { key: 'nodes', label: 'Nós', type: 'group', fields: [[
+      { key: 'autoRemoveOfflineMinutes', label: 'Remover automaticamente nós offline há mais de (min; vazio = nunca)', type: 'number',
+        help: 'Útil com Auto Scaling na AWS (o lifecycle hook já remove na hora; isto cobre instâncias que sumiram sem avisar). Mínimo 5.' }]] },
     { key: 'acme', label: "ACME / Let's Encrypt", type: 'group', fields: [[{ key: 'email', label: 'E-mail' },
       { key: 'backend', label: 'Manager visto pelo HAProxy (host:porta)', placeholder: '10.0.0.5:8080' }]] },
     { key: 'haproxy', label: 'HAProxy global', type: 'group', fields: [

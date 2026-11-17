@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { fmtBytes, fmtNum, slot, TimeChart, type Series } from '../charts';
-import { useLoad } from '../ui';
+import { useAction, useLoad, useToast } from '../ui';
+import { usePerm } from '../session';
 import { useFmt, useT } from '../prefs';
 
 const WINDOWS = [5, 15, 60];
@@ -23,6 +24,31 @@ export function MetricsTab({ cluster }: { cluster: any }) {
     () => api('GET', `/clusters/${cluster.id}/metrics?minutes=${minutes}${node ? `&node=${encodeURIComponent(node)}` : ''}`), [cluster.id, minutes, node], 5000);
   // cor segue o listener (ordem alfabética de todos os listeners do cluster), não a posição na série filtrada
   const { data: fes } = useLoad<any[]>(() => api('GET', `/clusters/${cluster.id}/frontends`), [cluster.id]);
+  const { data: rt, reload: reloadRt } = useLoad<any>(() => api('GET', `/clusters/${cluster.id}/runtime`), [cluster.id], 5000);
+  const { canEdit } = usePerm();
+  const run = useAction();
+  const toast = useToast();
+  const overrideOf = (be: string, srv: string) => (rt?.overrides ?? []).find((o: any) => o.backend === be && o.server === srv);
+  const change = (be: string, srv: string, state: string, askWeight = false) => run(async () => {
+    const cur = overrideOf(be, srv);
+    let weight = cur?.weight ?? null;
+    if (askWeight) {
+      const v = prompt(t('Peso de {s} (0-256; vazio = peso da configuração)', { s: `${be}/${srv}` }), weight ?? '');
+      if (v === null) return;
+      weight = v.trim() === '' ? null : Number(v);
+    }
+    const st = askWeight ? (cur?.state ?? 'ready') : state;
+    let reason = cur?.reason ?? '';
+    if (!askWeight && st !== 'ready') {
+      const r = prompt(t('Motivo (opcional, vai para a auditoria)'), '');
+      if (r === null) return;
+      reason = r;
+    }
+    await api('PUT', `/clusters/${cluster.id}/runtime/servers/${encodeURIComponent(be)}/${encodeURIComponent(srv)}`, { state: st, weight, reason });
+    toast(t('enviado aos nós (aplica em até 5 s, sem publicar)'));
+    reloadRt();
+  });
+  const runtimeErrors = Object.entries(rt?.nodes ?? {}).filter(([, r]: any) => !r.ok);
   const colorOf = useMemo(() => {
     const names = (fes ?? []).map((f) => f.name).sort();
     return (name: string) => (names.indexOf(name) >= 0 && names.indexOf(name) < MAX_SERIES - 1 ? slot(names.indexOf(name)) : slot(MAX_SERIES - 1));
@@ -111,15 +137,37 @@ export function MetricsTab({ cluster }: { cluster: any }) {
       {m.servers.length > 0 && (
         <div className="panel">
           <h3>{t('Servidores')}</h3>
+          <p className="muted">{t('Drenar, manutenção e peso valem na hora em todos os nós (runtime API do HAProxy), sem publicar, e continuam valendo após publicações. “Pronto” devolve o servidor ao estado da configuração.')}</p>
+          {runtimeErrors.map(([n, r]: any) => <p key={n} className="err">{n}: {r.error}</p>)}
           <table>
-            <thead><tr><th>Backend</th><th>{t('Servidor')}</th>{nodeStates({}).map((n: string) => <th key={n}>{n}</th>)}</tr></thead>
+            <thead><tr><th>Backend</th><th>{t('Servidor')}</th>{nodeStates({}).map((n: string) => <th key={n}>{n}</th>)}<th>{t('Operação')}</th>{canEdit && <th />}</tr></thead>
             <tbody>
-              {m.servers.map((s: any) => (
-                <tr key={`${s.backend}/${s.server}`}>
-                  <td>{s.backend}</td><td><b>{s.server}</b></td>
-                  {nodeStates(s.states).map((n: string) => <td key={n}>{s.states[n] ? <Status level={stLevel(s.states[n])} label={s.states[n]} /> : '—'}</td>)}
-                </tr>
-              ))}
+              {m.servers.map((s: any) => {
+                const o = overrideOf(s.backend, s.server);
+                const st = o?.state ?? 'ready';
+                return (
+                  <tr key={`${s.backend}/${s.server}`}>
+                    <td>{s.backend}</td><td><b>{s.server}</b></td>
+                    {nodeStates(s.states).map((n: string) => <td key={n}>{s.states[n] ? <Status level={stLevel(s.states[n])} label={s.states[n]} /> : '—'}</td>)}
+                    <td>
+                      {o ? (
+                        <span title={`${o.updatedBy ?? ''} · ${fmt.date(o.updatedAt)}${o.reason ? ` · ${o.reason}` : ''}`}>
+                          {st !== 'ready' && <span className="badge b-warn">{st === 'drain' ? t('drenando') : t('manutenção')}</span>}
+                          {o.weight != null && <span className="badge b-acc" style={{ marginLeft: 4 }}>{t('peso {w}', { w: o.weight })}</span>}
+                        </span>
+                      ) : <span className="muted">—</span>}
+                    </td>
+                    {canEdit && (
+                      <td><div className="actions">
+                        {st !== 'drain' && <button className="small" onClick={change(s.backend, s.server, 'drain')} title={t('Termina as conexões atuais e não recebe novas')}>{t('drenar')}</button>}
+                        {st !== 'maint' && <button className="small" onClick={change(s.backend, s.server, 'maint')} title={t('Tira do balanceamento imediatamente')}>{t('manutenção')}</button>}
+                        {st !== 'ready' && <button className="small" onClick={change(s.backend, s.server, 'ready')}>{t('pronto')}</button>}
+                        <button className="small" onClick={change(s.backend, s.server, st, true)}>{t('peso')}</button>
+                      </div></td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

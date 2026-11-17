@@ -30,5 +30,6 @@ fi
   --join-token-file "$TOKEN_FILE" \
   --node-name "$NODE_NAME" \
   --no-keepalived \
+  --aws-lifecycle --asg-hook "${lifecycle_hook_name}:${asg_name}" \
   "$${OTEL_ARGS[@]}"
 shred -u "$TOKEN_FILE"

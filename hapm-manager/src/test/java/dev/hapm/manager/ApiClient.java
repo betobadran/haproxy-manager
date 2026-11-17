@@ -40,6 +40,25 @@ public class ApiClient {
     }
   }
 
+  /** Corpo cru (YAML, haproxy.cfg...) em vez de JSON. */
+  Res raw(String method, String path, String body, String contentType) {
+    try {
+      var b = HttpRequest.newBuilder(URI.create(base + path)).timeout(Duration.ofSeconds(30)).header("Content-Type", contentType);
+      if (token != null) b.header("Authorization", "Bearer " + token);
+      b.method(method, HttpRequest.BodyPublishers.ofString(body));
+      var r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+      JsonNode node = null;
+      try {
+        node = JSON.readTree(r.body());
+      } catch (Exception ignored) {
+        // texto
+      }
+      return new Res(r.statusCode(), node, r.body());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   ApiClient login(String user, String password) {
     var c = new ApiClient(Integer.parseInt(base.substring(base.lastIndexOf(':') + 1)));
     var r = c.call("POST", "/api/auth/login", java.util.Map.of("username", user, "password", password));

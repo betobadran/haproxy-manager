@@ -36,6 +36,14 @@ public class AgentMain {
 
   private volatile State state = new State(null, false, 0, 0);
   private volatile Integer desiredVersion;
+  private final RuntimeOps runtimeOps = new RuntimeOps(System.getenv("HAPM_ADMIN_SOCKET"));
+  private volatile dev.hapm.core.model.AgentProtocol.Runtime runtimeDesired;
+  private volatile dev.hapm.core.model.AgentProtocol.RuntimeReport runtimeReport;
+  /** true quando a instância está sendo encerrada (scale-in na AWS): o manager remove o nó */
+  volatile boolean leaving;
+  /** o manager já confirmou a saída: o agente para de enviar heartbeats (senão o nó seria registrado de novo) */
+  private volatile boolean left;
+  private final AwsLifecycle lifecycle = AwsLifecycle.fromEnv(new SystemOps());
   private volatile boolean heartbeatOk;
   private volatile String haproxyVersion;
   private volatile boolean stop;
@@ -162,19 +170,33 @@ public class AgentMain {
 
   /** Um ciclo: heartbeat e, se preciso, aplica a versão desejada. Retorna segundos até o próximo. */
   double tick() throws Exception {
+    if (left) return 30;
+    if (lifecycle != null && !leaving && lifecycle.terminating()) {
+      leaving = true;
+      Log.info("Auto Scaling vai encerrar esta instância: avisando o manager para remover o nó");
+    }
     maybePreflight(false);
     HeartbeatResponse res;
     try {
       var hb = new Heartbeat(cfg.nodeName(), cfg.nodeAddress(), cfg.version(), haproxyVersion, vrrpState(), applier.appliedVersion(), state.lastApply(),
-          traffic.collect(), awsCheck);
+          traffic.collect(), awsCheck, runtimeReport, leaving ? Boolean.TRUE : null);
       res = JSON.readValue(call("POST", "/agent/v1/heartbeat", JSON.writeValueAsString(hb)), HeartbeatResponse.class);
       heartbeatOk = true;
+      if (leaving) {
+        left = true;
+        Log.info("manager removeu o nó; heartbeats encerrados");
+        if (lifecycle != null) lifecycle.complete();
+        return 30;
+      }
     } catch (IOException e) {
       heartbeatOk = false;
       Log.warn("heartbeat falhou: " + e.getMessage());
       return cfg.pollIntervalSec();
     }
     int poll = res.pollIntervalSec() == null ? cfg.pollIntervalSec() : Math.min(res.pollIntervalSec(), cfg.pollIntervalSec());
+    // estado operacional dos servidores (drain/maint/peso) pela runtime API
+    runtimeDesired = res.runtime();
+    runtimeReport = runtimeOps.reconcile(runtimeDesired);
     var d = res.desired();
     desiredVersion = d == null ? null : d.version();
     int applied = applier.appliedVersion();
@@ -195,6 +217,8 @@ public class AgentMain {
       state = new State(new LastApply(d.version(), true, null, Instant.now().toString()), state.usesKeepalived(), state.applySuccess() + 1, state.applyFailure());
       Log.info("v" + d.version() + " aplicada em " + r.durationMs() + "ms" + (r.keepalivedChanged() ? " (keepalived recarregado)" : ""));
       if (r.keepalivedChanged()) maybePreflight(true);
+      // o reload volta os servidores ao estado da configuração: reaplica drain/maint/peso já
+      runtimeReport = runtimeOps.reconcile(runtimeDesired);
     } catch (Exception e) {
       state = new State(new LastApply(d.version(), false, e.getMessage(), Instant.now().toString()), state.usesKeepalived(), state.applySuccess(), state.applyFailure() + 1);
       Log.error("falha ao aplicar v" + d.version() + ": " + e.getMessage());

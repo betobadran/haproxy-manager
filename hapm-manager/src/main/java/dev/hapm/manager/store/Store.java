@@ -395,9 +395,14 @@ public class Store {
   @Transactional
   public Optional<NotificationRow> createNotification(String level, String kind, String clusterId, String title, String message, String data, String dedupeKey) {
     if (dedupeKey != null && jdbc.sql("SELECT COUNT(*) FROM notifications WHERE dedupe_key = ?").param(dedupeKey).query(Long.class).single() > 0) return Optional.empty();
-    jdbc.sql("INSERT INTO notifications(ts, level, kind, cluster_id, title, message, data, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .params(now(), level, kind, clusterId, title, message, data, dedupeKey).update();
-    return jdbc.sql("SELECT * FROM notifications ORDER BY id DESC LIMIT 1").query(this::notification).optional();
+    long id;
+    try {
+      id = jdbc.sql("INSERT INTO notifications(ts, level, kind, cluster_id, title, message, data, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
+          .params(now(), level, kind, clusterId, title, message, data, dedupeKey).query(Long.class).single();
+    } catch (org.springframework.dao.DuplicateKeyException e) {
+      return Optional.empty(); // outra thread criou o mesmo alerta ao mesmo tempo
+    }
+    return jdbc.sql("SELECT * FROM notifications WHERE id = ?").param(id).query(this::notification).optional();
   }
 
   public void setDeliveries(long id, String deliveriesJson) {
@@ -418,6 +423,56 @@ public class Store {
 
   public boolean acknowledge(long id, String user) {
     return jdbc.sql("UPDATE notifications SET acknowledged_at = ?, acknowledged_by = ? WHERE id = ? AND acknowledged_at IS NULL").params(now(), user, id).update() == 1;
+  }
+
+  // ------------------------------------------------------------------ linha do tempo dos nós
+  /** subject: o que o evento descreve ("node:lb1", "server:web/web2", "cluster:vrrp") — usado para saber o último estado. */
+  public record EventRow(long id, String ts, String clusterId, String nodeName, String subject, String kind, String detail, String data) {}
+
+  private EventRow event(ResultSet rs, int i) throws SQLException {
+    return new EventRow(rs.getLong("id"), rs.getString("ts"), rs.getString("cluster_id"), rs.getString("node_name"), rs.getString("subject"),
+        rs.getString("kind"), rs.getString("detail"), rs.getString("data"));
+  }
+
+  public void addEvent(String clusterId, String nodeName, String subject, String kind, String detail, Map<String, ?> data) {
+    jdbc.sql("INSERT INTO node_events(ts, cluster_id, node_name, subject, kind, detail, data) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .params(now(), clusterId, nodeName, subject, kind, detail, data == null ? null : toJson(data)).update();
+  }
+
+  public List<EventRow> listEvents(String clusterId, int limit) {
+    return jdbc.sql("SELECT * FROM node_events WHERE cluster_id = ? ORDER BY id DESC LIMIT ?").params(clusterId, limit).query(this::event).list();
+  }
+
+  public Optional<EventRow> lastEvent(String clusterId, String subject) {
+    return jdbc.sql("SELECT * FROM node_events WHERE cluster_id = ? AND subject = ? ORDER BY id DESC LIMIT 1").params(clusterId, subject).query(this::event).optional();
+  }
+
+  /** Mantém só os eventos mais recentes de cada cluster. */
+  public void pruneEvents(String clusterId, int keep) {
+    jdbc.sql("DELETE FROM node_events WHERE cluster_id = ? AND id < (SELECT MIN(id) FROM (SELECT id FROM node_events WHERE cluster_id = ? ORDER BY id DESC LIMIT ?) t)")
+        .params(clusterId, clusterId, keep).update();
+  }
+
+  // ------------------------------------------------------------------ estado operacional de servidores (runtime API)
+  public record OverrideRow(String clusterId, String backend, String server, String state, Integer weight, String reason, String updatedBy, String updatedAt) {}
+
+  public List<OverrideRow> listOverrides(String clusterId) {
+    return jdbc.sql("SELECT * FROM server_overrides WHERE cluster_id = ? ORDER BY backend, server").param(clusterId)
+        .query((rs, i) -> new OverrideRow(rs.getString("cluster_id"), rs.getString("backend"), rs.getString("server"), rs.getString("state"),
+            nullableInt(rs, "weight"), rs.getString("reason"), rs.getString("updated_by"), rs.getString("updated_at"))).list();
+  }
+
+  @Transactional
+  public void putOverride(String clusterId, String backend, String server, String state, Integer weight, String reason, String user) {
+    jdbc.sql("DELETE FROM server_overrides WHERE cluster_id = ? AND backend = ? AND server = ?").params(clusterId, backend, server).update();
+    if (state == null && weight == null) return;
+    jdbc.sql("INSERT INTO server_overrides(cluster_id, backend, server, state, weight, reason, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .params(clusterId, backend, server, state, weight, reason, user, now()).update();
+  }
+
+  private static Integer nullableInt(ResultSet rs, String col) throws SQLException {
+    int v = rs.getInt(col);
+    return rs.wasNull() ? null : v;
   }
 
   // ------------------------------------------------------------------ ACME

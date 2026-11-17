@@ -103,3 +103,9 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "lifecycle_hook_timeout" {
+  description = "Segundos que a instância espera em Terminating:Wait para o agente avisar o manager (e o NLB drenar) antes de terminar"
+  type        = number
+  default     = 120
+}

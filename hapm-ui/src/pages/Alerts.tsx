@@ -66,6 +66,48 @@ export function ClusterAlerts({ cid }: { cid: string }) {
   );
 }
 
+// ------------------------------------------------------------------ linha do tempo do cluster
+const EVENT: Record<string, [string, string]> = {
+  failover: ['failover', 'b-warn'], 'vrrp-master': ['MASTER', 'b-ok'], vrrp: ['VRRP', 'b-muted'],
+  'node-offline': ['nó offline', 'b-err'], 'node-online': ['nó online', 'b-ok'], 'node-joined': ['nó registrado', 'b-acc'], 'node-left': ['nó removido', 'b-muted'],
+  'split-brain': ['split-brain', 'b-err'], 'no-master': ['sem MASTER', 'b-err'], 'vrrp-ok': ['VRRP normal', 'b-ok'],
+  'server-down': ['servidor DOWN', 'b-err'], 'server-up': ['servidor UP', 'b-ok'], 'deploy-failed': ['publicação falhou', 'b-err'],
+  'server-state': ['operação', 'b-acc'],
+};
+
+export function Timeline({ cid }: { cid: string }) {
+  const t = useT();
+  const fmt = useFmt();
+  const [all, setAll] = useState(false);
+  const { data } = useLoad<any[]>(() => api('GET', `/clusters/${cid}/events?limit=${all ? 300 : 15}`), [cid, all], 10000);
+  return (
+    <div className="panel">
+      <div className="chart-head">
+        <h3>{t('Linha do tempo')}</h3>
+        {(data?.length ?? 0) >= 15 && <button className="small" onClick={() => setAll((v) => !v)}>{all ? t('menos') : t('ver mais')}</button>}
+      </div>
+      {!data ? <p className="muted">{t('carregando...')}</p> : !data.length ? <p className="muted">{t('Nenhum evento ainda. Failovers, nós offline e servidores DOWN aparecem aqui.')}</p> : (
+        <table>
+          <thead><tr><th>{t('Horário')}</th><th>{t('Evento')}</th><th>{t('Nó')}</th><th>{t('Detalhe')}</th></tr></thead>
+          <tbody>
+            {data.map((e) => {
+              const [label, c] = EVENT[e.kind] ?? [e.kind, 'b-muted'];
+              return (
+                <tr key={e.id}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{fmt.date(e.ts)}</td>
+                  <td><span className={`badge ${c}`}>{t(label)}</span></td>
+                  <td>{e.node ?? '—'}</td>
+                  <td>{e.detail}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export function Alerts() {
   const t = useT();
   const fmt = useFmt();
@@ -127,6 +169,11 @@ export function Alerts() {
 
 const MASK = '********';
 
+const OPS: [string, string][] = [
+  ['failover', 'Failover (VIP mudou de nó)'], ['nodeOffline', 'Nó offline / voltou'], ['splitBrain', 'Split-brain / sem MASTER'],
+  ['deployFailed', 'Publicação com falha'], ['serverDown', 'Servidor de backend DOWN / voltou'],
+];
+
 export function NotifySettings() {
   const t = useT();
   const { data, reload } = useLoad<any>(() => api('GET', '/notifications/settings'), []);
@@ -143,6 +190,7 @@ export function NotifySettings() {
     email: { ...s.email, to: String(s.email.toText).split(/[,;\s]+/).filter(Boolean), port: Number(s.email.port) || 587 },
     teams: s.teams,
     webhook: s.webhook,
+    ops: s.ops,
   });
   const save = run(async () => {
     await api('PUT', '/notifications/settings', body());
@@ -169,11 +217,22 @@ export function NotifySettings() {
     <>
       <div className="top"><h2>{t('Canais de notificação')}</h2><div className="actions"><a className="btn" href="#/alerts">{t('Alertas')}</a></div></div>
       <div className="panel">
-        <h3>{t('Quando alertar')}</h3>
+        <h3>{t('Certificados: quando alertar')}</h3>
         <label className="f"><span>{t('Dias antes da expiração (separados por vírgula)')}</span>
           <input value={s.thresholdsText} onChange={(e) => setS({ ...s, thresholdsText: e.target.value })} />
         </label>
         <p className="muted">{t('Alertas aparecem sempre na tela; abaixo, os canais de envio. Menos de 7 dias ou expirado = crítico.')}</p>
+      </div>
+      <div className="panel">
+        <h3>{t('Alertas operacionais')}</h3>
+        <div className="row">
+          {OPS.map(([k, label]) => (
+            <label key={k} className="cb"><input type="checkbox" checked={!!s.ops?.[k]} onChange={(e) => set('ops', k, e.target.checked)} /> {t(label)}</label>
+          ))}
+        </div>
+        <label className="f" style={{ maxWidth: 360 }}><span>{t('Alertar nó offline após (segundos sem heartbeat)')}</span>
+          <input type="number" value={s.ops?.offlineAfterSec ?? 60} onChange={(e) => set('ops', 'offlineAfterSec', Number(e.target.value))} />
+        </label>
       </div>
       <div className="panel">
         <div className="chart-head"><h3>{t('E-mail (SMTP)')}</h3>{toggle('email')}</div>

@@ -44,16 +44,35 @@ public class NotificationService {
 
   public record Webhook(Boolean enabled, String url, String secret) {}
 
-  public record Settings(List<Integer> thresholds, Email email, Teams teams, Webhook webhook) {
+  /** Alertas operacionais (além de certificados). offlineAfterSec: tempo sem heartbeat para alertar nó offline. */
+  public record Ops(Boolean failover, Boolean nodeOffline, Integer offlineAfterSec, Boolean splitBrain, Boolean deployFailed, Boolean serverDown) {
+    public static Ops defaults() {
+      return new Ops(true, true, 60, true, true, true);
+    }
+
+    Ops normalized() {
+      var d = defaults();
+      return new Ops(failover == null ? d.failover : failover, nodeOffline == null ? d.nodeOffline : nodeOffline,
+          offlineAfterSec == null ? d.offlineAfterSec : offlineAfterSec, splitBrain == null ? d.splitBrain : splitBrain,
+          deployFailed == null ? d.deployFailed : deployFailed, serverDown == null ? d.serverDown : serverDown);
+    }
+  }
+
+  public record Settings(List<Integer> thresholds, Email email, Teams teams, Webhook webhook, Ops ops) {
+    public Settings(List<Integer> thresholds, Email email, Teams teams, Webhook webhook) {
+      this(thresholds, email, teams, webhook, Ops.defaults());
+    }
+
     public static Settings defaults() {
       return new Settings(List.of(30, 14, 7, 1), new Email(false, "", 587, "", "", "", List.of(), true, false),
-          new Teams(false, ""), new Webhook(false, "", ""));
+          new Teams(false, ""), new Webhook(false, "", ""), Ops.defaults());
     }
   }
 
   public record Delivery(String channel, boolean ok, String error, String at) {}
 
   private final Store store;
+  private final java.util.concurrent.ExecutorService sender = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
   private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
   public NotificationService(Store store) {
@@ -62,7 +81,8 @@ public class NotificationService {
 
   // ------------------------------------------------------------------ configuração
   public Settings settings() {
-    return store.getKv(SETTINGS_KEY).map(j -> store.fromJson(j, Settings.class)).orElseGet(Settings::defaults);
+    var s = store.getKv(SETTINGS_KEY).map(j -> store.fromJson(j, Settings.class)).orElseGet(Settings::defaults);
+    return new Settings(s.thresholds(), s.email(), s.teams(), s.webhook(), s.ops() == null ? Ops.defaults() : s.ops().normalized());
   }
 
   private static String keep(String incoming, String current) {
@@ -94,7 +114,9 @@ public class NotificationService {
     if (teams.enabled() && !teams.webhookUrl().startsWith("https://")) throw new IllegalArgumentException("Teams: informe a URL HTTPS do webhook (Workflows)");
     var hook = new Webhook(on(w.enabled()), nz(w.url()), keep(w.secret(), cur.webhook().secret()));
     if (hook.enabled() && !hook.url().matches("^https?://\\S+$")) throw new IllegalArgumentException("webhook: URL inválida");
-    var s = new Settings(new ArrayList<>(th.descendingSet()), email, teams, hook);
+    var ops = in.ops() == null ? cur.ops() : in.ops().normalized();
+    if (ops.offlineAfterSec() < 15 || ops.offlineAfterSec() > 3600) throw new IllegalArgumentException("tempo para alertar nó offline deve estar entre 15 e 3600 s");
+    var s = new Settings(new ArrayList<>(th.descendingSet()), email, teams, hook, ops);
     store.setKv(SETTINGS_KEY, store.toJson(s));
     return s;
   }
@@ -110,7 +132,7 @@ public class NotificationService {
         new Email(s.email().enabled(), s.email().host(), s.email().port(), s.email().username(), s.email().password().isEmpty() ? "" : MASK,
             s.email().from(), s.email().to(), s.email().starttls(), s.email().ssl()),
         new Teams(s.teams().enabled(), s.teams().webhookUrl().isEmpty() ? "" : MASK),
-        new Webhook(s.webhook().enabled(), s.webhook().url(), s.webhook().secret().isEmpty() ? "" : MASK));
+        new Webhook(s.webhook().enabled(), s.webhook().url(), s.webhook().secret().isEmpty() ? "" : MASK), s.ops());
   }
 
   // ------------------------------------------------------------------ verificação de certificados
@@ -164,9 +186,22 @@ public class NotificationService {
     return created;
   }
 
+  /** Alertas operacionais habilitados (failover, nó offline...). */
+  public Ops ops() {
+    return settings().ops();
+  }
+
   /** Alerta avulso (ex.: falha de emissão ACME). */
-  public void notify(String level, String kind, String clusterId, String title, String message, Map<String, Object> data, String dedupeKey) {
-    store.createNotification(level, kind, clusterId, title, message, data == null ? null : store.toJson(data), dedupeKey).ifPresent(n -> deliver(n, settings()));
+  public void notify(String level, String kind, String clusterId, String title, String message, Map<String, ?> data, String dedupeKey) {
+    // entrega em background: quem chama (ex.: heartbeat de agente) não espera SMTP/HTTP
+    store.createNotification(level, kind, clusterId, title, message, data == null ? null : store.toJson(data), dedupeKey)
+        .ifPresent(n -> sender.submit(() -> {
+          try {
+            deliver(n, settings());
+          } catch (Exception e) {
+            log.warn("falha entregando alerta #{}: {}", n.id(), e.getMessage());
+          }
+        }));
   }
 
   // ------------------------------------------------------------------ entrega
