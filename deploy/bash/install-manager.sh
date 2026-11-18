@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala/atualiza o HAPM manager como serviço systemd. Idempotente.
+# Instala/atualiza o HAProxy Manager como serviço systemd. Idempotente.
 #
 # Uso (como root, a partir do bundle):
 #   HAPM_ADMIN_PASSWORD='...' ./install-manager.sh
@@ -55,9 +55,9 @@ require_root
 if ! [[ $PORT =~ ^[0-9]+$ ]] || ((PORT < 1 || PORT > 65535)); then die "--port inválida"; fi
 if ! [[ $AGENT_PORT =~ ^[0-9]+$ ]] || ((AGENT_PORT > 65535)) || ((AGENT_PORT == PORT)); then die "--agent-port inválida (diferente de --port)"; fi
 B=$HAPM_BUNDLE_DIR
-[[ -f $B/hapm-manager.jar ]] || die "bundle sem hapm-manager.jar (gere com make-bundle.sh)"
+[[ -f $B/haproxy-manager-server.jar ]] || die "bundle sem haproxy-manager-server.jar (gere com make-bundle.sh)"
 
-log "HAPM manager na porta $PORT"
+log "HAProxy Manager na porta $PORT"
 pkgs=("$JAVA_PKG" curl)
 ((WITH_HAPROXY)) && pkgs+=(haproxy)
 ensure_packages "${pkgs[@]}"
@@ -70,7 +70,7 @@ install -d -m 0750 -o hapm -g hapm /var/lib/hapm-manager /etc/hapm-manager
 install -d -m 0755 /opt/hapm-manager
 
 changed=0
-copy_if_changed "$B/hapm-manager.jar" /opt/hapm-manager/hapm-manager.jar 0644 && changed=1
+copy_if_changed "$B/haproxy-manager-server.jar" /opt/hapm-manager/hapm-manager.jar 0644 && changed=1
 
 # ------------------------------------------------------------------ PostgreSQL local (instalação completa)
 setup_postgres() {
@@ -114,7 +114,7 @@ setup_postgres() {
 ((WITH_PG)) && setup_postgres
 
 ENV=/etc/hapm-manager/manager.env
-[[ -f $ENV ]] || { install -m 0600 -o hapm -g hapm /dev/null "$ENV"; echo '# Gerenciado pelo install-manager.sh do HAPM' > "$ENV"; }
+[[ -f $ENV ]] || { install -m 0600 -o hapm -g hapm /dev/null "$ENV"; echo '# Gerenciado pelo install-manager.sh do HAProxy Manager' > "$ENV"; }
 set_env_var "$ENV" HAPM_PORT "$PORT" && changed=1
 set_env_var "$ENV" HAPM_AGENT_PORT "$AGENT_PORT" && changed=1
 set_env_var "$ENV" HAPM_DATA_DIR /var/lib/hapm-manager && changed=1
@@ -137,7 +137,7 @@ chown hapm:hapm "$ENV"; chmod 0600 "$ENV"
 
 cat <<'UNIT' | write_if_changed /etc/systemd/system/hapm-manager.service 0644 && changed=1
 [Unit]
-Description=HAPM manager (control plane HAProxy/Keepalived)
+Description=HAProxy Manager (control plane HAProxy/Keepalived)
 After=network-online.target postgresql.service
 Wants=network-online.target
 

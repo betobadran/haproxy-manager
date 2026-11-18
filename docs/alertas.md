@@ -55,7 +55,7 @@ Cada canal tem um botão **Enviar teste**. Senhas, URL do Teams e segredo do web
 ### E-mail (SMTP)
 
 Servidor, porta (587 com STARTTLS, 465 com SSL/TLS direto, 25 sem TLS), usuário/senha (opcional), remetente e
-destinatários. O assunto vem como `[HAPM CRÍTICO] Certificado X expira em N dia(s) (cluster Y)`.
+destinatários. O assunto vem como `[HAProxy Manager CRÍTICO] Certificado X expira em N dia(s) (cluster Y)`.
 
 ### Microsoft Teams
 
@@ -65,7 +65,7 @@ Use um webhook de **Workflows** (o conector "Incoming Webhook" do Office 365 foi
 2. Escolha a equipe/canal e copie a URL gerada (HTTPS).
 3. Cole em **URL do webhook (Workflows)**, marque *ativo*, salve e clique em **Enviar teste**.
 
-O HAPM envia um *Adaptive Card* com nível (cor), título, mensagem e horário.
+O HAProxy Manager envia um *Adaptive Card* com nível (cor), título, mensagem e horário.
 
 ### Webhook genérico
 

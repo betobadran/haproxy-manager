@@ -4,22 +4,22 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>dev.hapm</groupId>
-    <artifactId>hapm-parent</artifactId>
+    <artifactId>haproxy-manager-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
-  <artifactId>hapm-manager</artifactId>
-  <name>HAPM manager</name>
+  <artifactId>haproxy-manager-server</artifactId>
+  <name>HAProxy Manager server</name>
   <description>Control plane: API REST, UI (React embutida), publicação, ACME e métricas</description>
 
   <dependencies>
     <dependency>
       <groupId>dev.hapm</groupId>
-      <artifactId>hapm-core</artifactId>
+      <artifactId>haproxy-manager-core</artifactId>
     </dependency>
     <!-- UI React compilada no build Maven e servida como recurso estático -->
     <dependency>
       <groupId>dev.hapm</groupId>
-      <artifactId>hapm-ui</artifactId>
+      <artifactId>haproxy-manager-ui</artifactId>
       <scope>runtime</scope>
     </dependency>
     <dependency>
@@ -135,14 +135,14 @@
     </dependency>
     <dependency>
       <groupId>dev.hapm</groupId>
-      <artifactId>hapm-agent</artifactId>
+      <artifactId>haproxy-manager-agent</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
 
   <build>
-    <finalName>hapm-manager</finalName>
+    <finalName>haproxy-manager-server</finalName>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>

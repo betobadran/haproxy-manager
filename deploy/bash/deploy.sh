@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala/atualiza o HAPM em vários servidores via SSH, a partir da sua máquina.
+# Instala/atualiza o HAProxy Manager em vários servidores via SSH, a partir da sua máquina.
 #
 #   deploy/bash/make-bundle.sh
 #   deploy/bash/deploy.sh -i hosts.conf manager     # 1) sobe o manager

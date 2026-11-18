@@ -25,7 +25,7 @@ import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider
  *
  * <ul>
  *   <li>sem role configurada: cadeia padrão do SDK (role da EC2/ECS, IRSA no EKS, SSO, perfil, variáveis de ambiente) —
- *       nenhuma chave fica no HAPM;</li>
+ *       nenhuma chave fica no HAProxy Manager;</li>
  *   <li>com role: {@code sts:AssumeRole} (ExternalId opcional) com credenciais temporárias renovadas automaticamente;
  *       a sessão se chama {@code hapm-<usuário>} (ações da tela) ou {@code hapm-<cluster>} (rotinas), visível no CloudTrail.</li>
  * </ul>
@@ -73,7 +73,7 @@ public class AwsClients {
     return endpoint(StsClient.builder().region(Region.of(region)).credentialsProvider(creds), stsEndpoint).build();
   }
 
-  /** Credenciais do cluster; {@code who} = usuário do HAPM (ou null para rotinas automáticas). */
+  /** Credenciais do cluster; {@code who} = usuário do HAProxy Manager (ou null para rotinas automáticas). */
   public AwsCredentialsProvider credentials(ClusterRow c, String who) {
     var a = access(c);
     if (a.roleArn().isEmpty()) return base;
@@ -121,7 +121,7 @@ public class AwsClients {
     var a = access(c);
     var checks = new ArrayList<Check>();
     String identity = null;
-    var mode = a.roleArn().isEmpty() ? "cadeia padrão do SDK (sem chaves no HAPM)" : "AssumeRole " + a.roleArn() + (a.externalId().isEmpty() ? "" : " (com ExternalId)");
+    var mode = a.roleArn().isEmpty() ? "cadeia padrão do SDK (sem chaves no HAProxy Manager)" : "AssumeRole " + a.roleArn() + (a.externalId().isEmpty() ? "" : " (com ExternalId)");
     try (var sts = sts(a.region(), credentials(c, who))) {
       identity = sts.getCallerIdentity().arn();
       checks.add(new Check("OK", "identidade: " + identity));

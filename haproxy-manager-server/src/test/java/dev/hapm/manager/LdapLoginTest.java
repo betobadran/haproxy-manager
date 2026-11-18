@@ -129,7 +129,7 @@ class LdapLoginTest {
     var users = admin.call("GET", "/api/users", null).body();
     assertThat(users.valueStream().filter(u -> u.get("username").asString().equals("alice")).findFirst().orElseThrow()
         .get("source").asString()).isEqualTo("ldap");
-    // papéis de usuários LDAP não são editáveis no HAPM
+    // papéis de usuários LDAP não são editáveis no HAProxy Manager
     assertThat(admin.call("PUT", "/api/users/alice", Map.of("roles", java.util.List.of("ADMIN"))).status()).isEqualTo(400);
   }
 }

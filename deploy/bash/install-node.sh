@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Instala/atualiza um nó HAProxy gerenciado pelo HAPM: HAProxy + Keepalived + hapm-agent (+ OTel Collector).
+# Instala/atualiza um nó HAProxy gerenciado pelo HAProxy Manager: HAProxy + Keepalived + hapm-agent (+ OTel Collector).
 # Idempotente: pode ser executado de novo para atualizar o agente ou mudar parâmetros; só reinicia o que mudou.
 #
 # Uso (no próprio servidor, como root, a partir do bundle gerado por make-bundle.sh):
@@ -15,7 +15,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 usage() {
   cat <<'USAGE'
 Opções:
-  --manager-url URL          URL do HAPM manager (obrigatório)
+  --manager-url URL          URL do HAProxy Manager (obrigatório)
   --join-token-file ARQ      arquivo com o token de join (ou variável HAPM_JOIN_TOKEN)
   --node-name NOME           nome do nó no manager (padrão: hostname curto)
   --interface IF             interface do VRRP/VIP (padrão: rota padrão)
@@ -74,7 +74,7 @@ NODE_NAME=${NODE_NAME:-$(hostname -s)}
 [[ -n $ADDRESS ]] || die "não foi possível descobrir o IP de $IFACE; use --address"
 
 B=$HAPM_BUNDLE_DIR
-for f in hapm-agent.jar scripts/check-haproxy.sh scripts/keepalived-notify.sh systemd/hapm-agent.service; do
+for f in haproxy-manager-agent.jar scripts/check-haproxy.sh scripts/keepalived-notify.sh systemd/hapm-agent.service; do
   [[ -f $B/$f ]] || die "bundle incompleto: falta $B/$f (gere com make-bundle.sh)"
 done
 FAM=$(os_family)
@@ -87,7 +87,7 @@ ensure_packages "${pkgs[@]}"
 
 # ------------------------------------------------------------------ kernel
 if printf '%s\n' \
-  '# Gerenciado pelo HAPM' \
+  '# Gerenciado pelo HAProxy Manager' \
   '# bind no VIP mesmo sendo BACKUP' \
   'net.ipv4.ip_nonlocal_bind = 1' \
   'net.ipv6.ip_nonlocal_bind = 1' \
@@ -97,7 +97,7 @@ if printf '%s\n' \
   sysctl -q -e -p /etc/sysctl.d/90-hapm.conf || warn "não foi possível aplicar todos os sysctls (container?)"
 fi
 
-# ------------------------------------------------------------------ arquivos do HAPM
+# ------------------------------------------------------------------ arquivos do HAProxy Manager
 install -d -m 0750 /etc/haproxy/hapm /etc/hapm /opt/hapm-agent
 install -d -m 0755 /var/lib/hapm /usr/local/lib/hapm
 copy_if_changed "$B/scripts/check-haproxy.sh" /usr/local/lib/hapm/check-haproxy.sh 0755 || true
@@ -107,7 +107,7 @@ copy_if_changed "$B/scripts/keepalived-notify.sh" /usr/local/lib/hapm/keepalived
 HAPROXY_BIN=$(command -v haproxy)
 haproxy_changed=0
 cat <<UNIT | write_if_changed /etc/systemd/system/haproxy.service.d/hapm.conf 0644 && haproxy_changed=1
-# Gerenciado pelo HAPM: a configuração ativa é /etc/haproxy/hapm/current/haproxy.cfg
+# Gerenciado pelo HAProxy Manager: a configuração ativa é /etc/haproxy/hapm/current/haproxy.cfg
 [Service]
 RuntimeDirectory=haproxy
 ExecStartPre=
@@ -121,10 +121,10 @@ LimitNOFILE=1048576
 UNIT
 
 agent_changed=0
-copy_if_changed "$B/hapm-agent.jar" /opt/hapm-agent/hapm-agent.jar 0644 && agent_changed=1
+copy_if_changed "$B/haproxy-manager-agent.jar" /opt/hapm-agent/hapm-agent.jar 0644 && agent_changed=1
 copy_if_changed "$B/systemd/hapm-agent.service" /etc/systemd/system/hapm-agent.service 0644 && agent_changed=1
 {
-  echo '# Gerenciado pelo install-node.sh do HAPM'
+  echo '# Gerenciado pelo install-node.sh do HAProxy Manager'
   echo "HAPM_MANAGER_URL=$MANAGER_URL"
   echo "HAPM_JOIN_TOKEN=$TOKEN"
   echo "HAPM_NODE_NAME=$NODE_NAME"

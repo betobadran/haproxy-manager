@@ -1,5 +1,5 @@
 #!/bin/bash
-# HAPM — script de notificação do keepalived e failover de IP na AWS.
+# HAProxy Manager — script de notificação do keepalived e failover de IP na AWS.
 #
 #   keepalived-notify.sh INSTANCE <nome> MASTER|BACKUP|FAULT|STOP <prioridade>   (chamado pelo keepalived)
 #   keepalived-notify.sh --preflight                                              (chamado pelo hapm-agent)
@@ -30,7 +30,7 @@ imds() {
   curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" "$IMDS/latest/meta-data/$1"
 }
 
-# ENI que deve receber os IPs: a configurada no HAPM (por nó) ou a da interface do VRRP
+# ENI que deve receber os IPs: a configurada no HAProxy Manager (por nó) ou a da interface do VRRP
 resolve_eni() {
   if [ -n "${HAPM_ENI_ID:-}" ]; then echo "$HAPM_ENI_ID"; return 0; fi
   local mac
@@ -122,7 +122,7 @@ preflight() {
   fi
   [ -n "${HAPM_AWS_REGION:-}" ] || fail "região AWS não configurada"
   local eni info subnet srcdst vpc cidr vpccidr rtb rvpc
-  if ! eni=$(resolve_eni) || [ -z "$eni" ]; then fail "não foi possível descobrir a ENI (IMDS inacessível? configure a ENI do nó no HAPM)"; return 1; fi
+  if ! eni=$(resolve_eni) || [ -z "$eni" ]; then fail "não foi possível descobrir a ENI (IMDS inacessível? configure a ENI do nó no HAProxy Manager)"; return 1; fi
   info=$(ec2 describe-network-interfaces --network-interface-ids "$eni" --query 'NetworkInterfaces[0].[SubnetId,SourceDestCheck,VpcId]' --output text 2>&1) \
     || { fail "não consegui ler a ENI $eni: $(echo "$info" | tail -n1)"; return 1; }
   read -r subnet srcdst vpc <<< "$info"

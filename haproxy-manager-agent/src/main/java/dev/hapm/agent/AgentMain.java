@@ -20,7 +20,7 @@ import java.util.concurrent.Executors;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/** HAPM agent: heartbeat -> manager, baixa e aplica a versão desejada, expõe /metrics. */
+/** HAProxy Manager agent: heartbeat -> manager, baixa e aplica a versão desejada, expõe /metrics. */
 public class AgentMain {
 
   /** Estado persistido em {stateDir}/agent-state.json. */

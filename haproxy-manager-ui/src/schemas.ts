@@ -91,7 +91,7 @@ export const clusterSchema: Row[] = [
       [{ key: 'region', label: 'Região', placeholder: 'sa-east-1' }, { key: 'sessionMinutes', label: 'Duração da sessão (min)', type: 'number', default: 60 }],
       [{ key: 'roleArn', label: 'Role a assumir (vazio = credenciais do próprio manager)', placeholder: 'arn:aws:iam::123456789012:role/hapm-manager' },
         { key: 'externalId', label: 'ExternalId (recomendado para outra conta)' }],
-    ], help: 'Sem role, o manager usa a cadeia padrão do SDK (role da EC2/ECS, IRSA, SSO): nenhuma chave fica no HAPM. Com role, usa sts:AssumeRole com sessão hapm-<usuário>, visível no CloudTrail.' },
+    ], help: 'Sem role, o manager usa a cadeia padrão do SDK (role da EC2/ECS, IRSA, SSO): nenhuma chave fica no HAProxy Manager. Com role, usa sts:AssumeRole com sessão hapm-<usuário>, visível no CloudTrail.' },
     { key: 'logs', label: 'Logs de acesso', type: 'group', fields: [
       [{ key: 'enabled', label: 'Enviar logs de acesso (logfmt, syslog RFC 5424)', type: 'checkbox' },
         { key: 'userAgent', label: 'Incluir User-Agent', type: 'checkbox', default: true }],

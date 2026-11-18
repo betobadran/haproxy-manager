@@ -1,4 +1,4 @@
-# Instaladores Bash do HAPM
+# Instaladores Bash do HAProxy Manager
 
 | Script | Onde roda | Faz |
 |---|---|---|

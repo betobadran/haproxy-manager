@@ -53,7 +53,7 @@ public class Applier {
 
   public static String bootstrapConfig(int statsPort) {
     return String.join("\n",
-        "# Configuração inicial do HAPM (nenhuma versão publicada ainda)",
+        "# Configuração inicial do HAProxy Manager (nenhuma versão publicada ainda)",
         "global",
         "    maxconn 4096",
         "defaults",

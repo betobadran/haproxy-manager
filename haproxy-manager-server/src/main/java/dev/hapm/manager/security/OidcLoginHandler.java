@@ -18,7 +18,7 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-/** Conclusão do login OIDC: grupos do token -> papéis -> sessão do HAPM -> volta para a UI com código de uso único. */
+/** Conclusão do login OIDC: grupos do token -> papéis -> sessão do HAProxy Manager -> volta para a UI com código de uso único. */
 @Component
 public class OidcLoginHandler implements AuthenticationSuccessHandler, AuthenticationFailureHandler {
   private final AuthService auth;

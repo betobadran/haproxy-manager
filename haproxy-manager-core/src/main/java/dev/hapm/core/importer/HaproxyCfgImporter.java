@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Converte um haproxy.cfg existente para o modelo do HAPM (listeners, backends, regras, timeouts). O que não tem
+ * Converte um haproxy.cfg existente para o modelo do HAProxy Manager (listeners, backends, regras, timeouts). O que não tem
  * equivalente vai para o bloco "avançado" (extra) da seção, quando seguro, ou é listado em {@code warnings}.
  * Nada é aplicado aqui: o resultado passa pela mesma validação de qualquer cadastro.
  */
@@ -94,7 +94,7 @@ public final class HaproxyCfgImporter {
     return n;
   }
 
-  /** linhas que podem ir para o bloco avançado (sem aspas/barra invertida: regra anti-injeção do HAPM) */
+  /** linhas que podem ir para o bloco avançado (sem aspas/barra invertida: regra anti-injeção do HAProxy Manager) */
   static void extra(List<String> extra, String line, Ctx ctx, String where) {
     if (Checks.SAFE_LINE.matcher(line).matches() && !line.isBlank()) {
       extra.add(line);
@@ -105,7 +105,7 @@ public final class HaproxyCfgImporter {
   }
 
   // ------------------------------------------------------------------ ACLs
-  /** Converte o critério de uma ACL para uma condição do HAPM; null se não houver equivalente. */
+  /** Converte o critério de uma ACL para uma condição do HAProxy Manager; null se não houver equivalente. */
   static Frontend.Condition condition(List<String> t, boolean negate) {
     if (t.isEmpty()) return null;
     var crit = t.get(0);
@@ -312,7 +312,7 @@ public final class HaproxyCfgImporter {
         } else extra(extra, l, ctx, where);
       }
       case "set-header" -> {
-        if (args.size() == 2 && args.get(0).equalsIgnoreCase("X-Forwarded-Proto")) return; // o HAPM já gera com "X-Forwarded-For"
+        if (args.size() == 2 && args.get(0).equalsIgnoreCase("X-Forwarded-Proto")) return; // o HAProxy Manager já gera com "X-Forwarded-For"
         if (args.size() == 2) rules.add(new Frontend.Rule(null, cond, "set_header", null, null, null, null, null, args.get(0), args.get(1), "request"));
         else extra(extra, l, ctx, where);
       }
@@ -456,7 +456,7 @@ public final class HaproxyCfgImporter {
               case "inter" -> hcInter = i + 1 < t.size() ? t.get(++i) : null;
               case "fall" -> hcFall = parseInt(t, ++i);
               case "rise" -> hcRise = parseInt(t, ++i);
-              case "cookie", "ca-file", "crt", "port", "addr" -> i++; // o HAPM gera / não suportado
+              case "cookie", "ca-file", "crt", "port", "addr" -> i++; // o HAProxy Manager gera / não suportado
               case "resolvers", "init-addr", "resolve-prefer", "agent-port", "agent-inter", "slowstart", "on-marked-down", "observe",
                    "error-limit", "proto", "send-proxy", "send-proxy-v2", "check-ssl", "alpn", "pool-max-conn", "pool-purge-delay" -> {
                 ctx.warn(where, "servidor " + sname + ": opção \"" + t.get(i) + "\" ignorada");
@@ -521,9 +521,9 @@ public final class HaproxyCfgImporter {
               }
               case "group", "daemon", "chroot", "pidfile", "master-worker", "ca-base", "crt-base", "ssl-default-bind-ciphers",
                    "ssl-default-bind-ciphersuites", "ssl-default-server-options", "ssl-default-server-ciphers", "tune.ssl.default-dh-param" -> {
-                // o HAPM gera estes valores
+                // o HAProxy Manager gera estes valores
               }
-              default -> ctx.warn(where, "ignorado (seção global é gerada pelo HAPM; use \"Linhas extras em global\" se necessário): " + l);
+              default -> ctx.warn(where, "ignorado (seção global é gerada pelo HAProxy Manager; use \"Linhas extras em global\" se necessário): " + l);
             }
           }
         }
@@ -543,7 +543,7 @@ public final class HaproxyCfgImporter {
                 default -> ctx.warn(where, "timeout ignorado: " + l);
               }
             } else if (!t.isEmpty() && !Set.of("mode", "log", "option", "retries").contains(t.get(0))) {
-              ctx.warn(where, "ignorado (defaults é gerado pelo HAPM; use \"Linhas extras em defaults\"): " + l);
+              ctx.warn(where, "ignorado (defaults é gerado pelo HAProxy Manager; use \"Linhas extras em defaults\"): " + l);
             }
           }
         }
@@ -571,7 +571,7 @@ public final class HaproxyCfgImporter {
             } else (be ? beLines : feLines).add(l);
           }
           if (s.name().equals("stats") || feLines.stream().anyMatch(l -> l.startsWith("stats "))) {
-            ctx.warn(where, "seção de estatísticas ignorada (o HAPM expõe stats/métricas na porta configurada)");
+            ctx.warn(where, "seção de estatísticas ignorada (o HAProxy Manager expõe stats/métricas na porta configurada)");
             usedNames.remove(fname);
             usedNames.remove(bname);
             continue;

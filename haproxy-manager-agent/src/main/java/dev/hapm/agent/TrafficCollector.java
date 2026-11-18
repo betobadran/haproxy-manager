@@ -47,7 +47,7 @@ public class TrafficCollector {
     double responseTime, queue, sessions, r5xx, responses;
   }
 
-  /** Converte o texto do exporter em uma amostra. Ignora os proxies internos do HAPM (hapm_*). */
+  /** Converte o texto do exporter em uma amostra. Ignora os proxies internos do HAProxy Manager (hapm_*). */
   static Traffic parse(String text, long ts) {
     var fes = new TreeMap<String, Fe>();
     var bes = new TreeMap<String, Be>();

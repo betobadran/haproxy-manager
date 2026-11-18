@@ -1,6 +1,6 @@
 # Primeiros passos: criar e configurar um cluster pela tela
 
-Este guia vai do zero até um par de HAProxy em alta disponibilidade servindo tráfego, tudo pela interface do HAPM.
+Este guia vai do zero até um par de HAProxy em alta disponibilidade servindo tráfego, tudo pela interface do HAProxy Manager.
 Pré-requisito: o manager instalado (`deploy/bash/install-manager.sh`, ver [README](../README.md)) e acessível no navegador.
 
 ## 1. Entrar
@@ -49,11 +49,11 @@ a **ENI** de cada nó. O token pode ser rotacionado em Configurações (ADMIN).
 ## 5. Certificados
 
 Aba **Certificados**:
-- **Enviar certificado (PEM)**: cole o PEM (certificado + cadeia + chave). O HAPM valida o par chave/certificado e extrai domínios e validade.
+- **Enviar certificado (PEM)**: cole o PEM (certificado + cadeia + chave). O HAProxy Manager valida o par chave/certificado e extrai domínios e validade.
 - **Emitir com Let's Encrypt (HTTP-01)**: informe os domínios e clique em **Emitir** (o listener na porta 80 precisa ter *Responder ACME* marcado). A renovação é automática 30 dias antes do vencimento
   e, se marcado no cluster, publicada automaticamente.
 
-- **AWS Certificate Manager (ACM)**: certificado público exportável (inclusive wildcard), validado por DNS — o HAPM
+- **AWS Certificate Manager (ACM)**: certificado público exportável (inclusive wildcard), validado por DNS — o HAProxy Manager
   cria os registros no Route 53, exporta quando emitido e reexporta a cada renovação. Requer o "Acesso do manager à
   AWS" em Configurações; ver [aws-acesso.md](aws-acesso.md).
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=HAPM agent (gerência de HAProxy/Keepalived)
+Description=HAProxy Manager agent (gerência de HAProxy/Keepalived)
 After=network-online.target haproxy.service
 Wants=network-online.target
 

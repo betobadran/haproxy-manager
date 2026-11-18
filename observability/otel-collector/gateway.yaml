@@ -1,4 +1,4 @@
-# OTel Collector gateway (central): recebe OTLP dos nós, raspa o HAPM manager,
+# OTel Collector gateway (central): recebe OTLP dos nós, raspa o HAProxy Manager,
 # grava métricas no Prometheus (remote write) e logs de acesso no Loki (OTLP nativo do Loki 3).
 # Variáveis: PROMETHEUS_REMOTE_WRITE_URL (ex.: http://prometheus:9090/api/v1/write), HAPM_MANAGER_TARGET (ex.: hapm-manager:8080),
 #            LOKI_OTLP_ENDPOINT (ex.: http://loki:3100/otlp)

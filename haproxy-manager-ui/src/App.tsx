@@ -33,8 +33,8 @@ function Layout({ active, children }: { active: string; children: ReactNode }) {
   return (
     <div className="layout">
       <nav className="side">
-        <h1>HAPM</h1>
-        <div className="sub">HAProxy HA Manager</div>
+        <h1>HAProxy Manager</h1>
+        <div className="sub">HAProxy + Keepalived</div>
         <a href="#/" className={active === 'home' ? 'active' : ''}>{t('Clusters')}</a>
         <div className="section">{t('Clusters')}</div>
         {(clusters ?? []).map((c) => (

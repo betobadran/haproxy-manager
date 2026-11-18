@@ -43,7 +43,7 @@ import software.amazon.awssdk.services.route53.model.RRType;
  *       para criação manual;</li>
  *   <li>quando o ACM emite, exporta (chave privada cifrada com uma passphrase aleatória, decifrada aqui), guarda como
  *       qualquer certificado e publica;</li>
- *   <li>o ACM renova sozinho; o HAPM percebe a nova validade, exporta de novo e publica.</li>
+ *   <li>o ACM renova sozinho; o HAProxy Manager percebe a nova validade, exporta de novo e publica.</li>
  * </ol>
  * Atenção: cada emissão/renovação exportável é cobrada pela AWS.
  */
@@ -186,7 +186,7 @@ public class AcmService {
         byZone.computeIfAbsent(z, k -> new ArrayList<>()).add(rec);
       }
       for (var e : byZone.entrySet()) {
-        r53.changeResourceRecordSets(r -> r.hostedZoneId(e.getKey()).changeBatch(b -> b.comment("HAPM: validação de certificado ACM")
+        r53.changeResourceRecordSets(r -> r.hostedZoneId(e.getKey()).changeBatch(b -> b.comment("HAProxy Manager: validação de certificado ACM")
             .changes(e.getValue().stream().map(rec -> software.amazon.awssdk.services.route53.model.Change.builder().action(ChangeAction.UPSERT)
                 .resourceRecordSet(s -> s.name(rec.name()).type(RRType.fromValue(rec.type())).ttl(300L).resourceRecords(v -> v.value(rec.value())))
                 .build()).toList())));
@@ -274,7 +274,7 @@ public class AcmService {
       log.info("ACM renovou o certificado {} ({} -> {}); exportando de novo", c.name(), current, d.notAfter());
       export(cluster, certId, c, d, null);
       notifications.notify("info", "acm-renewed", cid, "Certificado " + c.name() + " renovado pelo ACM",
-          "Nova validade: " + d.notAfter() + ". O HAPM exportou o certificado renovado" + (cluster.settings().autoDeployOnCertRenew() ? " e publicou." : "; publique para aplicar."),
+          "Nova validade: " + d.notAfter() + ". O HAProxy Manager exportou o certificado renovado" + (cluster.settings().autoDeployOnCertRenew() ? " e publicou." : "; publique para aplicar."),
           Map.of("certificate", c.name(), "notAfter", d.notAfter().toString()), "acm-renewed:" + cid + ":" + c.name() + ":" + d.notAfter());
       return true;
     }

@@ -95,7 +95,7 @@ export function ClusterImportExport({ cluster, onChange }: { cluster: any; onCha
         <label className="cb" style={{ marginBottom: 0 }}><input type="checkbox" checked={secrets} onChange={(e) => setSecrets(e.target.checked)} /> {t('incluir segredos (chaves privadas, senhas VRRP/stats)')}</label>
       </div>
 
-      <h4>{t('Importar exportação do HAPM')}</h4>
+      <h4>{t('Importar exportação do HAProxy Manager')}</h4>
       <textarea className="mono" rows={6} value={doc} onChange={(e) => setDoc(e.target.value)} placeholder={t('Cole aqui o YAML/JSON exportado, ou escolha um arquivo')} />
       <div className="row" style={{ alignItems: 'center' }}>
         <input type="file" accept=".yaml,.yml,.json" onChange={readFile(setDoc)} />
@@ -111,7 +111,7 @@ export function ClusterImportExport({ cluster, onChange }: { cluster: any; onCha
       </div>
 
       <h4>{t('Importar haproxy.cfg existente')}</h4>
-      <p className="muted">{t('Converte frontends, backends, listen, ACLs e regras para o modelo do HAPM (sempre mesclando). O que não tiver equivalente vai para o bloco avançado ou aparece nos avisos — nada some sem aviso.')}</p>
+      <p className="muted">{t('Converte frontends, backends, listen, ACLs e regras para o modelo do HAProxy Manager (sempre mesclando). O que não tiver equivalente vai para o bloco avançado ou aparece nos avisos — nada some sem aviso.')}</p>
       <textarea className="mono" rows={6} value={cfg} onChange={(e) => setCfg(e.target.value)} placeholder="frontend www&#10;    bind :80&#10;    default_backend web&#10;backend web&#10;    server w1 10.0.0.1:8080 check" />
       <div className="row" style={{ alignItems: 'center' }}>
         <input type="file" accept=".cfg,.conf,.txt" onChange={readFile(setCfg)} />
@@ -146,7 +146,7 @@ export function ImportNewCluster({ onDone }: { onDone: () => void }) {
   };
   return (
     <details className="panel">
-      <summary><b>{t('Importar cluster (de uma exportação do HAPM)')}</b></summary>
+      <summary><b>{t('Importar cluster (de uma exportação do HAProxy Manager)')}</b></summary>
       <label className="f"><span>{t('Nome do novo cluster (vazio = o do documento)')}</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
       <textarea className="mono" rows={6} value={doc} onChange={(e) => setDoc(e.target.value)} placeholder={t('Cole aqui o YAML/JSON exportado, ou escolha um arquivo')} />
       <div className="row" style={{ alignItems: 'center' }}><input type="file" accept=".yaml,.yml,.json" onChange={readFile(setDoc)} /></div>

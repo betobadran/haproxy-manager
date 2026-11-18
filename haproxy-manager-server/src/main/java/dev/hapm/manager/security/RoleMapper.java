@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
-/** Converte grupos do LDAP/AD/IdP em papéis do HAPM conforme hapm.auth.role-mapping. */
+/** Converte grupos do LDAP/AD/IdP em papéis do HAProxy Manager conforme hapm.auth.role-mapping. */
 @Component
 public class RoleMapper {
   private static final Pattern FIRST_CN = Pattern.compile("^\\s*cn=([^,]+)", Pattern.CASE_INSENSITIVE);

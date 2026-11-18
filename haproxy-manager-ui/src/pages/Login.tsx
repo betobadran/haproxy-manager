@@ -53,7 +53,7 @@ export function Login({ callback }: { callback?: boolean }) {
   return (
     <>
     <div className="panel login">
-      <h3>{t('HAPM · entrar')}</h3>
+      <h3>{t('HAProxy Manager · entrar')}</h3>
       {providers?.oidc && (
         <>
           <a className="btn primary" style={{ display: 'block', textAlign: 'center', marginBottom: 14 }} href={providers.oidc.url}>{providers.oidc.label}</a>

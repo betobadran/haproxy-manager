@@ -40,7 +40,7 @@ public final class KeepalivedRenderer {
     boolean unicast = ClusterSettings.AWS_EIP.equals(s.mode()) || k.unicast(); // AWS não tem multicast
 
     var L = new ArrayList<String>();
-    L.add("# Gerado pelo HAPM (HAProxy HA Manager) - NÃO EDITE MANUALMENTE");
+    L.add("# Gerado pelo HAProxy Manager - NÃO EDITE MANUALMENTE");
     L.add("# cluster: " + cluster.name() + "   nó: " + node.name() + "   versão: " + version);
     L.add("global_defs {");
     L.add("    router_id " + node.name().replaceAll("[^A-Za-z0-9_.-]", "_"));
@@ -93,7 +93,7 @@ public final class KeepalivedRenderer {
   public static String failoverEnv(Cluster cluster, NodeInfo node) {
     var s = cluster.settings();
     var L = new ArrayList<String>();
-    L.add("# Gerado pelo HAPM - usado por keepalived-notify.sh no modo aws-eip");
+    L.add("# Gerado pelo HAProxy Manager - usado por keepalived-notify.sh no modo aws-eip");
     L.add("HAPM_MODE=" + s.mode());
     if (ClusterSettings.AWS_EIP.equals(s.mode())) {
       var a = s.aws();

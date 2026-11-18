@@ -1,5 +1,5 @@
 # Topologia AWS recomendada: NLB (multi-AZ, gerenciado pela AWS) -> Auto Scaling Group de HAProxy.
-# Não há VIP/keepalived: a alta disponibilidade da "porta de entrada" é do NLB; o HAPM gerencia
+# Não há VIP/keepalived: a alta disponibilidade da "porta de entrada" é do NLB; o HAProxy Manager gerencia
 # listeners, regras e certificados de todos os nós (o agente se registra sozinho no manager).
 
 data "aws_ssm_parameter" "ubuntu" {
@@ -23,7 +23,7 @@ locals {
 # ------------------------------------------------------------------ rede
 resource "aws_security_group" "nodes" {
   name        = "${var.name}-haproxy"
-  description = "Nós HAProxy gerenciados pelo HAPM"
+  description = "Nós HAProxy gerenciados pelo HAProxy Manager"
   vpc_id      = var.vpc_id
   tags        = local.tags
 }

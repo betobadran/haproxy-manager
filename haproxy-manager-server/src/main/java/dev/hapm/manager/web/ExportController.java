@@ -56,7 +56,7 @@ public class ExportController {
     try {
       return t.startsWith("{") ? json.readValue(t, ClusterExport.class) : yaml.readValue(t, ClusterExport.class);
     } catch (Exception e) {
-      throw Http.status(HttpStatus.BAD_REQUEST, "documento inválido (JSON ou YAML do HAPM): " + e.getMessage().lines().findFirst().orElse(""));
+      throw Http.status(HttpStatus.BAD_REQUEST, "documento inválido (JSON ou YAML do HAProxy Manager): " + e.getMessage().lines().findFirst().orElse(""));
     }
   }
 

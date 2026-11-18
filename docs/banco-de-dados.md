@@ -41,7 +41,7 @@ Vários managers: aponte todos para o mesmo PostgreSQL e use o mesmo `HAPM_SECRE
 
 ## Migrações
 
-Flyway, com scripts separados por banco em `hapm-manager/src/main/resources/db/migration/{sqlite,postgresql}`
+Flyway, com scripts separados por banco em `haproxy-manager-server/src/main/resources/db/migration/{sqlite,postgresql}`
 (mesmas versões nos dois). Elas rodam sozinhas na subida do manager.
 
 Não há migração automática de dados de SQLite para PostgreSQL. Para trocar de banco, suba o manager novo no
@@ -51,7 +51,7 @@ PostgreSQL e recrie os clusters (ou exporte pela API).
 
 A suíte do manager roda por padrão em SQLite (um arquivo temporário por classe de teste). Contra PostgreSQL:
 ```bash
-mvn -pl hapm-manager test -Dhapm.test.pg=jdbc:postgresql://127.0.0.1:5432/postgres \
+mvn -pl haproxy-manager-server test -Dhapm.test.pg=jdbc:postgresql://127.0.0.1:5432/postgres \
     -Dhapm.test.pg.user=postgres -Dhapm.test.pg.password=...
 ```
 (cria um banco `hapm_t_<classe>` novo por classe de teste). As duas variantes passam.

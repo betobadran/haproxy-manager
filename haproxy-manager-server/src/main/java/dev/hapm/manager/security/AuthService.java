@@ -67,7 +67,7 @@ public class AuthService {
   /** Usuário autenticado externamente (LDAP/OIDC): papéis vêm dos grupos. */
   public Outcome external(String username, String displayName, String source, java.util.Collection<String> groups) {
     var roles = mapper.map(groups);
-    if (roles.isEmpty()) return new Denied("autenticado, mas sem papel no HAPM (peça inclusão em um dos grupos mapeados)");
+    if (roles.isEmpty()) return new Denied("autenticado, mas sem papel no HAProxy Manager (peça inclusão em um dos grupos mapeados)");
     var names = new java.util.TreeSet<String>();
     roles.forEach(r -> names.add(r.name()));
     store.upsertExternalUser(username, source, displayName, names);

@@ -187,7 +187,7 @@ class RenderTest {
   @Test
   void keepalivedAcceptsGeneratedConfig() throws Exception {
     assumeTrue(Fixtures.hasBin("keepalived"), "keepalived não instalado");
-    var scripts = Path.of("..", "hapm-agent", "src", "main", "dist", "scripts").toAbsolutePath().normalize().toString();
+    var scripts = Path.of("..", "haproxy-manager-agent", "src", "main", "dist", "scripts").toAbsolutePath().normalize().toString();
     var conf = KeepalivedRenderer.render(Fixtures.cluster("/tmp/x.sock"), Fixtures.nodes(), Fixtures.nodes().get(0), 1).replace(KeepalivedRenderer.LIB_DIR, scripts);
     var f = Files.createTempFile("keepalived", ".conf");
     Files.writeString(f, conf);

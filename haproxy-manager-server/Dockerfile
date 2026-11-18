@@ -4,7 +4,7 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jre-headless haproxy ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && useradd -r -m -d /home/hapm hapm && mkdir /data && chown hapm /data
-COPY target/hapm-manager.jar /opt/hapm/hapm-manager.jar
+COPY target/haproxy-manager-server.jar /opt/hapm/hapm-manager.jar
 ENV HAPM_DATA_DIR=/data \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 VOLUME /data

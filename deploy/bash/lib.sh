@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Funções comuns dos instaladores do HAPM (sourced por install-*.sh e deploy.sh).
+# Funções comuns dos instaladores do HAProxy Manager (sourced por install-*.sh e deploy.sh).
 # shellcheck disable=SC2034
 
 set -o errexit -o nounset -o pipefail

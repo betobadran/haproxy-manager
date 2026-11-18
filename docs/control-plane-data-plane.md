@@ -2,7 +2,7 @@
 
 | | Control plane (manager) | Data plane (cada nó) |
 |---|---|---|
-| Componentes | interface, API, banco, validação, geração das configurações, aprovações, alertas, busca de logs, ACM | HAProxy, Keepalived, hapm-agent, OTel Collector |
+| Componentes | interface, API, banco, validação, geração das configurações, aprovações, alertas, busca de logs, ACM | HAProxy, Keepalived, haproxy-manager-agent, OTel Collector |
 | Fica fora do ar | sem publicar, sem registrar nós novos, sem alertas | o outro nó assume o VIP (failover) |
 | Tráfego dos clientes | nunca passa pelo manager | sempre |
 

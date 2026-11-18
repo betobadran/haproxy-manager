@@ -1,4 +1,4 @@
-# Lab completo do HAPM: 2 nós HAProxy+Keepalived compartilhando o VIP 172.30.0.100,
+# Lab completo do HAProxy Manager: 2 nós HAProxy+Keepalived compartilhando o VIP 172.30.0.100,
 # 2 backends, manager, OTel Collector (edge por nó + gateway), Prometheus, Loki (logs de acesso) e Grafana.
 # Suba com ./setup.sh (cria o cluster no manager e gera o token de join).
 name: hapm-lab
@@ -29,8 +29,8 @@ volumes:
 
 services:
   manager:
-    build: ../hapm-manager
-    image: hapm-manager
+    build: ../haproxy-manager-server
+    image: haproxy-manager-server
     restart: unless-stopped
     environment:
       HAPM_ADMIN_PASSWORD: ${HAPM_ADMIN_PASSWORD:-admin12345}

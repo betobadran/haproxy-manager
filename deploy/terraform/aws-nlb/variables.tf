@@ -24,7 +24,7 @@ variable "internal" {
 }
 
 variable "listener_ports" {
-  description = "Portas TCP expostas no NLB e repassadas aos listeners do HAProxy (configurados no HAPM)"
+  description = "Portas TCP expostas no NLB e repassadas aos listeners do HAProxy (configurados no HAProxy Manager)"
   type        = list(number)
   default     = [80, 443]
 }
@@ -62,7 +62,7 @@ variable "desired_capacity" {
 }
 
 variable "manager_url" {
-  description = "URL do HAPM manager acessível pelas instâncias (ex.: https://hapm.interno.exemplo.com)"
+  description = "URL do HAProxy Manager acessível pelas instâncias (ex.: https://hapm.interno.exemplo.com)"
   type        = string
 }
 

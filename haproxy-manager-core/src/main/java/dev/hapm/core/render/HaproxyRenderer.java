@@ -282,7 +282,7 @@ public final class HaproxyRenderer {
 
     var L = new ArrayList<String>();
     L.add("# ==========================================================================");
-    L.add("# Gerado pelo HAPM (HAProxy HA Manager) - NÃO EDITE MANUALMENTE");
+    L.add("# Gerado pelo HAProxy Manager - NÃO EDITE MANUALMENTE");
     L.add("# cluster: " + s.cluster().name() + "   versão: " + version + "   gerado em: " + generatedAt);
     L.add("# ==========================================================================");
     L.add("global");

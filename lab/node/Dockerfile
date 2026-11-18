@@ -4,8 +4,8 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
       haproxy keepalived openjdk-21-jre-headless curl iproute2 procps busybox ca-certificates \
     && rm -rf /var/lib/apt/lists/* && mkdir -p /run/haproxy /var/lib/hapm /etc/hapm
-COPY hapm-agent/target/hapm-agent.jar /opt/hapm-agent/hapm-agent.jar
-COPY hapm-agent/src/main/dist/scripts/ /usr/local/lib/hapm/
+COPY haproxy-manager-agent/target/haproxy-manager-agent.jar /opt/hapm-agent/hapm-agent.jar
+COPY haproxy-manager-agent/src/main/dist/scripts/ /usr/local/lib/hapm/
 COPY lab/node/entrypoint.sh /entrypoint.sh
 COPY lab/node/demo-backend.sh /usr/local/bin/demo-backend.sh
 RUN chmod 755 /usr/local/lib/hapm/*.sh /entrypoint.sh /usr/local/bin/demo-backend.sh

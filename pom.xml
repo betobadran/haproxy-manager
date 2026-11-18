@@ -12,10 +12,10 @@
   </parent>
 
   <groupId>dev.hapm</groupId>
-  <artifactId>hapm-parent</artifactId>
+  <artifactId>haproxy-manager-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>HAPM - HAProxy HA Manager</name>
+  <name>HAProxy Manager</name>
   <licenses>
     <license>
       <name>Apache-2.0</name>
@@ -26,10 +26,10 @@
   <description>Gerência de HAProxy + Keepalived em alta disponibilidade (on-premise e AWS)</description>
 
   <modules>
-    <module>hapm-core</module>
-    <module>hapm-ui</module>
-    <module>hapm-manager</module>
-    <module>hapm-agent</module>
+    <module>haproxy-manager-core</module>
+    <module>haproxy-manager-ui</module>
+    <module>haproxy-manager-server</module>
+    <module>haproxy-manager-agent</module>
   </modules>
 
   <properties>
@@ -50,12 +50,12 @@
     <dependencies>
       <dependency>
         <groupId>dev.hapm</groupId>
-        <artifactId>hapm-core</artifactId>
+        <artifactId>haproxy-manager-core</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>dev.hapm</groupId>
-        <artifactId>hapm-ui</artifactId>
+        <artifactId>haproxy-manager-ui</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

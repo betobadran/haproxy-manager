@@ -104,7 +104,7 @@ public record ClusterSettings(
   /**
    * Acesso do MANAGER à AWS (certificados ACM, Route 53). Sem roleArn usa a cadeia padrão do SDK (role da EC2/ECS,
    * IRSA, SSO, variáveis de ambiente); com roleArn assume essa role via STS (outra conta, com ExternalId), em sessões
-   * nomeadas com o usuário do HAPM (rastreáveis no CloudTrail).
+   * nomeadas com o usuário do HAProxy Manager (rastreáveis no CloudTrail).
    */
   public record AwsAccess(String region, String roleArn, String externalId, Integer sessionMinutes) {
     public boolean assumesRole() {

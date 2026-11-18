@@ -169,7 +169,7 @@ public class NotificationService {
             : "Certificado " + cert.name() + " expira em " + days + " dia(s) (cluster " + c.name() + ")";
         var msg = (expired ? "Expirou em " : "Expira em ") + cert.meta().notAfter() + ". Domínios: " + domains + ". Origem: "
             + ("acme".equals(cert.source()) ? "ACME (renovação automática: verifique se ela está falhando)"
-                : "acm".equals(cert.source()) ? "AWS ACM (o ACM renova e o HAPM reexporta: verifique a validação DNS no ACM e o acesso à AWS)"
+                : "acm".equals(cert.source()) ? "AWS ACM (o ACM renova e o HAProxy Manager reexporta: verifique a validação DNS no ACM e o acesso à AWS)"
                 : "upload manual (envie o novo certificado e publique)") + ".";
         var data = new LinkedHashMap<String, Object>();
         data.put("cluster", c.name());
@@ -220,7 +220,7 @@ public class NotificationService {
   /** Envia uma mensagem de teste a um canal (botão "Enviar teste" na tela). */
   public Delivery test(String channel) {
     var s = settings();
-    var n = new NotificationRow(0, Instant.now().toString(), "info", "test", null, "Teste de alerta do HAPM",
+    var n = new NotificationRow(0, Instant.now().toString(), "info", "test", null, "Teste de alerta do HAProxy Manager",
         "Se você recebeu esta mensagem, o canal " + channel + " está configurado corretamente.", null, null, null, null);
     return switch (channel) {
       case "email" -> attempt("email", () -> sendEmail(s.email(), n));
@@ -271,8 +271,8 @@ public class NotificationService {
     var m = new SimpleMailMessage();
     m.setFrom(e.from());
     m.setTo(e.to().toArray(String[]::new));
-    m.setSubject("[HAPM " + levelLabel(n.level()) + "] " + n.title());
-    m.setText(n.title() + "\n\n" + n.message() + "\n\nData: " + n.ts() + "\n-- \nHAPM - HAProxy HA Manager");
+    m.setSubject("[HAProxy Manager " + levelLabel(n.level()) + "] " + n.title());
+    m.setText(n.title() + "\n\n" + n.message() + "\n\nData: " + n.ts() + "\n-- \nHAProxy Manager");
     sender.send(m);
   }
 
@@ -287,7 +287,7 @@ public class NotificationService {
     var card = Map.of(
         "$schema", "http://adaptivecards.io/schemas/adaptive-card.json", "type", "AdaptiveCard", "version", "1.4",
         "body", List.of(
-            Map.of("type", "TextBlock", "text", "HAPM · " + levelLabel(n.level()), "weight", "Bolder", "color", color, "size", "Small"),
+            Map.of("type", "TextBlock", "text", "HAProxy Manager · " + levelLabel(n.level()), "weight", "Bolder", "color", color, "size", "Small"),
             Map.of("type", "TextBlock", "text", n.title(), "weight", "Bolder", "size", "Medium", "wrap", true),
             Map.of("type", "TextBlock", "text", n.message(), "wrap", true),
             Map.of("type", "TextBlock", "text", n.ts(), "isSubtle", true, "size", "Small")));

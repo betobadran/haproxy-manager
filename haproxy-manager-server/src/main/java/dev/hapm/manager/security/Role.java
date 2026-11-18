@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Papéis do HAPM.
+ * Papéis do HAProxy Manager.
  * <ul>
  *   <li>VIEWER: só leitura</li>
  *   <li>OPERATOR: edita listeners/backends/certificados e publica (ou solicita publicação quando o cluster exige aprovação)</li>

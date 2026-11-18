@@ -5,6 +5,6 @@ data/
 *.mv.db
 .terraform/
 *.tfstate*
-hapm-ui/node/
-hapm-ui/dist/
+haproxy-manager-ui/node/
+haproxy-manager-ui/dist/
 .env

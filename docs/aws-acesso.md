@@ -13,7 +13,7 @@ Configurações do cluster › **Acesso do manager à AWS** (ADMIN):
 
 **Sem role** o manager usa a cadeia padrão do AWS SDK, na ordem: variáveis de ambiente, perfil/SSO
 (`~/.aws`), **role da tarefa ECS**, **IRSA** (EKS) e **instance profile** da EC2. É o recomendado: nenhuma chave fica
-no HAPM, e o manager herda a role da máquina onde roda. Chave de acesso fixa (`AWS_ACCESS_KEY_ID`/
+no HAProxy Manager, e o manager herda a role da máquina onde roda. Chave de acesso fixa (`AWS_ACCESS_KEY_ID`/
 `AWS_SECRET_ACCESS_KEY` no `manager.env`) funciona, mas evite.
 
 **Com role** o manager assume a role com credenciais temporárias:
@@ -45,21 +45,21 @@ Desde junho de 2025 o ACM emite **certificados públicos exportáveis**: a chave
 no HAProxy. Aba **Certificados › AWS Certificate Manager (ACM)**:
 
 1. **Domínios** (até 10, aceita `*.dominio` — wildcard, que o Let's Encrypt via HTTP-01 não cobre) e **validação**:
-   - *automática no Route 53*: o HAPM cria os CNAMEs de validação na zona pública que contém cada nome (ou na zona
+   - *automática no Route 53*: o HAProxy Manager cria os CNAMEs de validação na zona pública que contém cada nome (ou na zona
      informada);
    - *manual*: a tela mostra os registros para você criar no seu DNS.
-2. O HAPM pede o certificado com `Export=ENABLED` (com tags `hapm-cluster`/`hapm-certificate`) e acompanha a
+2. O HAProxy Manager pede o certificado com `Export=ENABLED` (com tags `hapm-cluster`/`hapm-certificate`) e acompanha a
    validação a cada minuto.
-3. Emitido, o HAPM **exporta** (`ExportCertificate` com uma passphrase aleatória de uso único), decifra a chave
+3. Emitido, o HAProxy Manager **exporta** (`ExportCertificate` com uma passphrase aleatória de uso único), decifra a chave
    (PKCS#8) no manager, guarda como qualquer certificado e **publica** (se "publicar automaticamente quando um
    certificado for renovado" estiver ligado no cluster).
-4. **Renovação**: o ACM renova sozinho; a cada 6 h o HAPM compara a validade e, se mudou, exporta de novo, publica e
+4. **Renovação**: o ACM renova sozinho; a cada 6 h o HAProxy Manager compara a validade e, se mudou, exporta de novo, publica e
    avisa (alerta informativo `acm-renewed`).
 
 ![Certificados do ACM](telas/certificados-acm-dark.png)
 
 Também dá para usar um **certificado exportável já existente** informando o ARN. Certificados pedidos antes de
-17/06/2025 ou sem `Export=ENABLED` **não** são exportáveis: o HAPM mostra o erro e alerta (`acm-failed`).
+17/06/2025 ou sem `Export=ENABLED` **não** são exportáveis: o HAProxy Manager mostra o erro e alerta (`acm-failed`).
 
 > **Custo:** a AWS cobra cada emissão e cada renovação de certificado exportável (no lançamento: cerca de US$ 15 por
 > nome e US$ 149 por wildcard; validade de 395 dias). A tela pede confirmação antes do pedido.
@@ -71,7 +71,7 @@ TLS ficam com o NLB.
 ## Validação
 
 Sem conta AWS no ambiente de desenvolvimento, os testes usam uma **AWS simulada** que fala os protocolos reais do
-SDK (STS query/XML, ACM JSON 1.1, Route 53 REST/XML) — `hapm-manager/src/test/java/dev/hapm/manager/FakeAws.java`:
+SDK (STS query/XML, ACM JSON 1.1, Route 53 REST/XML) — `haproxy-manager-server/src/test/java/dev/hapm/manager/FakeAws.java`:
 cadeia padrão, AssumeRole com ExternalId e nome de sessão, trust policy negada, permissão faltando, pedido
 exportável, CNAME no Route 53, emissão só depois da validação, exportação com chave cifrada, renovação, ARN
 existente e ARN não exportável. Também foi exercitado contra o **moto** (outra implementação dos protocolos da AWS): AssumeRole com ExternalId,

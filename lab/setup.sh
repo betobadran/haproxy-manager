@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Sobe o lab do HAPM do zero: build Maven -> imagens -> manager -> cluster/objetos via API -> nós -> publicação.
+# Sobe o lab do HAProxy Manager do zero: build Maven -> imagens -> manager -> cluster/objetos via API -> nós -> publicação.
 set -euo pipefail
 cd "$(dirname "$0")"
 PASS="${HAPM_ADMIN_PASSWORD:-admin12345}"
 API=http://127.0.0.1:8080/api
 j() { python3 -c "import sys,json;print(json.load(sys.stdin)$1)"; }
 
-if [ ! -f ../hapm-manager/target/hapm-manager.jar ] || [ ! -f ../hapm-agent/target/hapm-agent.jar ] || [ "${REBUILD:-0}" = 1 ]; then
+if [ ! -f ../haproxy-manager-server/target/haproxy-manager-server.jar ] || [ ! -f ../haproxy-manager-agent/target/haproxy-manager-agent.jar ] || [ "${REBUILD:-0}" = 1 ]; then
   echo "==> build Maven (manager, agente e UI)"
   (cd .. && mvn -q -DskipTests package)
 fi
@@ -54,7 +54,7 @@ cat <<MSG
 Pronto!
   Manager:    http://localhost:8080   (admin / $PASS)
   VIP:        curl http://172.30.0.100/   e   curl http://172.30.0.100/api/
-  Grafana:    http://localhost:3000   (admin / ${GRAFANA_PASSWORD:-admin}) -> pasta HAPM
+  Grafana:    http://localhost:3000   (admin / ${GRAFANA_PASSWORD:-admin}) -> pasta HAProxy Manager
   Prometheus: http://localhost:9090
 
 Teste de failover:  docker compose stop lb1   (o VIP migra para lb2 em ~3s)

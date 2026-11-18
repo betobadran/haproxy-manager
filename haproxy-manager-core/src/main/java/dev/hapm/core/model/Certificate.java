@@ -42,8 +42,8 @@ public record Certificate(String name, String source, String pem, Meta meta, Acm
   public record DnsRecord(String name, String type, String value) {}
 
   /**
-   * Certificado do ACM. arn vazio = o HAPM pede um novo (exportável, validação por DNS); arn preenchido = usa um
-   * certificado exportável existente. validation: "route53" (o HAPM cria os registros) ou "manual" (a tela mostra os
+   * Certificado do ACM. arn vazio = o HAProxy Manager pede um novo (exportável, validação por DNS); arn preenchido = usa um
+   * certificado exportável existente. validation: "route53" (o HAProxy Manager cria os registros) ou "manual" (a tela mostra os
    * registros para criar). status: requested | pending-validation | issued | error.
    */
   public record AwsInfo(String arn, @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY) List<String> domains, String validation,

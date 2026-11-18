@@ -213,7 +213,7 @@ public class ExportService {
   // ------------------------------------------------------------------ haproxy.cfg
   public Report importHaproxyCfg(String clusterId, String cfg, boolean settings, boolean dryRun, String user) {
     var r = HaproxyCfgImporter.convert(cfg);
-    // a seção global do arquivo não deve trocar o socket/usuário que o HAPM usa nos nós: só limites, log e timeouts
+    // a seção global do arquivo não deve trocar o socket/usuário que o HAProxy Manager usa nos nós: só limites, log e timeouts
     var h = r.haproxy();
     var haproxy = new ClusterSettings.Haproxy(h.maxconn(), h.nbthread(), null, null, null, null, null, null, h.sslMinVer(), null, h.timeouts(), null, null);
     var doc = new ClusterExport(FORMAT, Instant.now().toString(), null,

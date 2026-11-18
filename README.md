@@ -1,4 +1,4 @@
-# HAPM — HAProxy HA Manager
+# HAProxy Manager
 
 Gerência de **HAProxy em alta disponibilidade** — algo como o *nginx-proxy-manager*, mas para HAProxy e com
 foco em HA: setup dos nós, gestão de listeners, regras, backends e certificados (upload ou Let's Encrypt),
@@ -28,16 +28,16 @@ da UI (baixados pelo `frontend-maven-plugin`); nada de Node roda em produção.
 ```mermaid
 flowchart LR
   subgraph cp[Control plane]
-    UI[UI React] --> M[hapm-manager<br/>Spring Boot]
+    UI[UI React] --> M[haproxy-manager-server<br/>Spring Boot]
     M --- DB[(SQLite / PostgreSQL)]
   end
   subgraph n1[Nó 1]
-    A1[hapm-agent] -->|valida, troca release,<br/>reload sem queda| H1[HAProxy]
+    A1[haproxy-manager-agent] -->|valida, troca release,<br/>reload sem queda| H1[HAProxy]
     A1 --> K1[Keepalived]
     O1[OTel Collector edge]
   end
   subgraph n2[Nó 2]
-    A2[hapm-agent] --> H2[HAProxy]
+    A2[haproxy-manager-agent] --> H2[HAProxy]
     A2 --> K2[Keepalived]
     O2[OTel Collector edge]
   end
@@ -101,7 +101,7 @@ recebe a versão desejada.
   enviam no heartbeat; o manager guarda 1 h em memória, sem depender de Prometheus (que continua para histórico e alertas).
 - **Interface em pt-BR e en-US** (detectado pelo navegador, alternável) e **tema claro / automático / escuro**;
   **formato de data, de hora e fuso horário** escolhidos por usuário e salvos na conta.
-  O build da UI falha se algum texto novo não tiver tradução (`hapm-ui/scripts/i18n-keys.mjs`).
+  O build da UI falha se algum texto novo não tiver tradução (`haproxy-manager-ui/scripts/i18n-keys.mjs`).
 - **Login corporativo e governança:** LDAP/Active Directory e OIDC/SSO (Keycloak, Entra ID, Okta), papéis
   VIEWER / OPERATOR / APPROVER / ADMIN a partir dos grupos, e **aprovação de publicação com quatro olhos**
   (quem pede não aprova), publicação emergencial auditada. Detalhes em [docs/autenticacao.md](docs/autenticacao.md).
@@ -115,10 +115,10 @@ Segurança da geração: todo valor que vira configuração é validado contra i
 
 ```
 pom.xml                    POM pai (Maven multi-módulo)
-hapm-core/                 modelo, validação, render de haproxy.cfg/keepalived.conf (Java puro)
-hapm-ui/                   React + Vite + TypeScript (frontend-maven-plugin -> META-INF/resources)
-hapm-manager/              Spring Boot: API REST, UI, publicação, ACME, /metrics, SQLite ou PostgreSQL  (+ Dockerfile)
-hapm-agent/                agente Java (jar único) + scripts do keepalived + unit systemd
+haproxy-manager-core/      modelo, validação, render de haproxy.cfg/keepalived.conf (Java puro)
+haproxy-manager-ui/        React + Vite + TypeScript (frontend-maven-plugin -> META-INF/resources)
+haproxy-manager-server/    Spring Boot: API REST, UI, publicação, ACME, /metrics, SQLite ou PostgreSQL  (+ Dockerfile)
+haproxy-manager-agent/     agente Java (jar único) + scripts do keepalived + unit systemd
 observability/             OTel Collector (edge e gateway), Prometheus (+ alertas), Grafana (dashboard)
 deploy/bash/               instaladores Bash (manager e nós) + deploy via SSH + bundle
 deploy/terraform/aws-nlb/  AWS: NLB + Auto Scaling Group
@@ -133,8 +133,8 @@ Requisitos: **JDK 21** e **Maven 3.9+** (o Node para a UI é baixado pelo própr
 ```bash
 mvn clean verify          # compila tudo e roda os testes
 # artefatos:
-#   hapm-manager/target/hapm-manager.jar   (inclui a UI)
-#   hapm-agent/target/hapm-agent.jar
+#   haproxy-manager-server/target/haproxy-manager-server.jar   (inclui a UI)
+#   haproxy-manager-agent/target/haproxy-manager-agent.jar
 ```
 
 Rede corporativa sem acesso à internet: aponte `-Dnode.download.root=` e `-Dnpm.registry=` para o
@@ -143,8 +143,8 @@ Nexus/Artifactory (há proxies prontos para `nodejs.org/dist` e para o registry 
 Os testes usam `haproxy` e `keepalived` reais quando instalados (são pulados se não existirem), incluindo um
 teste ponta a ponta com manager + agente + HAProxy em master-worker.
 
-Desenvolvimento da UI com hot reload: `cd hapm-ui && npx vite` (faz proxy de `/api` para o manager em `:8080`).
-Traduções: os textos pt-BR são a chave e `hapm-ui/src/i18n.en.ts` traz o en-US. Mensagens de validação vindas da
+Desenvolvimento da UI com hot reload: `cd haproxy-manager-ui && npx vite` (faz proxy de `/api` para o manager em `:8080`).
+Traduções: os textos pt-BR são a chave e `haproxy-manager-ui/src/i18n.en.ts` traz o en-US. Mensagens de validação vindas da
 API ainda são exibidas em pt-BR.
 
 ## Lab completo em Docker
@@ -159,7 +159,7 @@ docker compose -f lab/docker-compose.yml stop lb1   # failover: o VIP vai para o
 ```
 
 - Manager: http://localhost:8080 (admin / admin12345)
-- Grafana: http://localhost:3000 (dashboard *HAPM · HAProxy alta disponibilidade*)
+- Grafana: http://localhost:3000 (dashboard *HAProxy Manager · HAProxy alta disponibilidade*)
 - Prometheus: http://localhost:9090
 
 ## On-premise (scripts Bash)
@@ -245,7 +245,7 @@ protocolo 112 liberado entre eles no security group.
 
 ```
 HAProxy (exporter nativo :8405/metrics) ┐
-hapm-agent (:9101/metrics)              ├─> OTel Collector edge (por nó) ─OTLP─> OTel gateway ─remote write─> Prometheus ─> Grafana
+haproxy-manager-agent (:9101/metrics)            ├─> OTel Collector edge (por nó) ─OTLP─> OTel gateway ─remote write─> Prometheus ─> Grafana
 métricas do host (hostmetrics)          ┘                                         ↑ raspa o manager (/metrics)
 ```
 
@@ -271,7 +271,7 @@ Métricas próprias: `hapm_vrrp_is_master`, `hapm_vrrp_state{state}`, `hapm_keep
 `HAPM_LOKI_URL` (+ `HAPM_LOKI_TENANT`, `HAPM_LOKI_TOKEN`) para a busca de logs, `HAPM_AGENT_PORT` (porta exclusiva dos agentes), `HAPM_DB_URL`/`HAPM_DB_USER`/`HAPM_DB_PASSWORD` (PostgreSQL; sem eles, SQLite em `HAPM_DATA_DIR` — ver [docs/banco-de-dados.md](docs/banco-de-dados.md)), `HAPM_ACME_DIRECTORY`
 (`acme://letsencrypt.org`; staging: `acme://letsencrypt.org/staging`), `HAPM_HAPROXY_BIN`, `HAPM_NODE_OFFLINE_AFTER` (15 s).
 
-**Agente**: ver `hapm-agent/src/main/dist/systemd/agent.env.example` — `HAPM_MANAGER_URL`, `HAPM_JOIN_TOKEN`,
+**Agente**: ver `haproxy-manager-agent/src/main/dist/systemd/agent.env.example` — `HAPM_MANAGER_URL`, `HAPM_JOIN_TOKEN`,
 `HAPM_NODE_NAME`, `HAPM_NODE_INTERFACE`/`HAPM_NODE_ADDRESS`, `HAPM_RELOAD_MODE` (`systemd` | `master-socket` | `command`).
 CA interna para o manager: importe no truststore do JVM ou use `-Djavax.net.ssl.trustStore=`.
 

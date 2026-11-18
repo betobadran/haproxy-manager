@@ -370,7 +370,7 @@ function Certificates({ cluster }: { cluster: any }) {
       </details>
       <details className="panel">
         <summary><b>{t('AWS Certificate Manager (ACM)')}</b></summary>
-        <p className="muted">{t('Certificado público exportável do ACM (inclusive wildcard), validado por DNS. O HAPM cria os registros no Route 53, exporta quando emitido e reexporta a cada renovação automática do ACM. Usa o “Acesso do manager à AWS” deste cluster. Cada emissão/renovação exportável é cobrada pela AWS.')}</p>
+        <p className="muted">{t('Certificado público exportável do ACM (inclusive wildcard), validado por DNS. O HAProxy Manager cria os registros no Route 53, exporta quando emitido e reexporta a cada renovação automática do ACM. Usa o “Acesso do manager à AWS” deste cluster. Cada emissão/renovação exportável é cobrada pela AWS.')}</p>
         <Fields rows={[[{ key: 'name', label: 'Nome' }, { key: 'validation', label: 'Validação DNS', type: 'select', default: 'route53',
             options: [['route53', 'automática no Route 53'], ['manual', 'manual (mostrar os registros)']] }],
           { key: 'domains', label: 'Domínios (aceita *.dominio)', type: 'tokens', placeholder: 'loja.example.com *.example.com' },

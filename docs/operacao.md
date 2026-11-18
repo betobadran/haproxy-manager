@@ -77,7 +77,7 @@ API (ADMIN): `GET /api/clusters/{id}/export?format=yaml&secrets=false`, `POST /a
 
 Na mesma tela, cole ou escolha o arquivo e clique em **Simular**. O conversor entende:
 
-| No haproxy.cfg | Vira no HAPM |
+| No haproxy.cfg | Vira no HAProxy Manager |
 |---|---|
 | `frontend` | listener (binds, `ssl`, `alpn h2`, `maxconn`, `timeout client`, `option forwardfor`) |
 | `backend` | backend (servidores com peso/backup/maxconn/disabled/ssl, `balance`, `option httpchk`, `http-check send/expect`, `default-server inter/fall/rise`, `cookie ... insert`, `compression algo gzip`, timeouts) |

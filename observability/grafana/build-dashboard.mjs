@@ -134,7 +134,7 @@ const varQuery = (name, label, query) => ({
 
 const dashboard = {
   uid: 'hapm-overview',
-  title: 'HAPM · HAProxy alta disponibilidade',
+  title: 'HAProxy Manager · HAProxy alta disponibilidade',
   tags: ['haproxy', 'keepalived', 'hapm'],
   timezone: 'browser',
   schemaVersion: 39,
