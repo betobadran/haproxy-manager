@@ -1,0 +1,75 @@
+# Manager do HAProxy Manager em Docker, para produção (OPCIONAL: a alternativa é deploy/bash/install-manager.sh).
+# Sobe: PostgreSQL + manager + Caddy (TLS na frente da interface e da porta dos agentes).
+# Os nós (HAProxy + Keepalived + agente) NÃO rodam aqui: continuam nos servidores, via deploy/bash/install-node.sh.
+#
+#   cp .env.example .env    # preencha domínio, TLS e segredos
+#   (na raiz do repositório) mvn -q -DskipTests package
+#   docker compose up -d --build
+#
+# Guia completo: docs/manager-docker.md
+name: haproxy-manager
+
+services:
+  db:
+    image: postgres:17.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hapm
+      POSTGRES_USER: hapm
+      POSTGRES_PASSWORD: ${HAPM_DB_PASSWORD:?defina HAPM_DB_PASSWORD no .env}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hapm -d hapm"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [internal]
+
+  manager:
+    build: ../../haproxy-manager-server
+    image: haproxy-manager-server:${HAPM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      HAPM_DB_URL: jdbc:postgresql://db:5432/hapm
+      HAPM_DB_USER: hapm
+      HAPM_DB_PASSWORD: ${HAPM_DB_PASSWORD}
+      HAPM_SECRET: ${HAPM_SECRET:?defina HAPM_SECRET no .env (openssl rand -base64 48)}
+      HAPM_ADMIN_PASSWORD: ${HAPM_ADMIN_PASSWORD:-}
+      # porta exclusiva dos agentes (/agent/**, desafio ACME e health); a 8080 fica só para a interface/API
+      HAPM_AGENT_PORT: "8081"
+      JAVA_TOOL_OPTIONS: ${HAPM_JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError}
+    # LDAP/OIDC, SMTP, região AWS etc. (opcional): copie manager.env.example para manager.env
+    env_file:
+      - path: manager.env
+        required: false
+    # sem portas publicadas: só o proxy fala com o manager
+    networks: [internal]
+
+  proxy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on: [manager]
+    environment:
+      MANAGER_DOMAIN: ${MANAGER_DOMAIN:?defina MANAGER_DOMAIN no .env}
+      MANAGER_TLS: ${MANAGER_TLS:-}
+    ports:
+      - "${HTTP_PORT:-80}:80"           # redireciona para HTTPS (e desafio do certificado do próprio Caddy)
+      - "${UI_PORT:-443}:443"           # interface e API: rede de administração
+      - "${AGENTS_PORT:-8443}:8443"     # agentes (TLS): rede dos nós
+      - "${ACME_PORT:-8088}:8088"       # desafio ACME dos listeners (HTTP), alcançado pelos nós
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+
+networks:
+  internal: {}
+
+volumes:
+  pgdata: {}
+  caddy-data: {}
+  caddy-config: {}

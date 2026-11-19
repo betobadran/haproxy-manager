@@ -121,6 +121,7 @@ haproxy-manager-server/    Spring Boot: API REST, UI, publicação, ACME, /metri
 haproxy-manager-agent/     agente Java (jar único) + scripts do keepalived + unit systemd
 observability/             OTel Collector (edge e gateway), Prometheus (+ alertas), Grafana (dashboard)
 deploy/bash/               instaladores Bash (manager e nós) + deploy via SSH + bundle
+deploy/docker/             manager em Docker para produção (opcional): PostgreSQL + proxy TLS
 deploy/terraform/aws-nlb/  AWS: NLB + Auto Scaling Group
 deploy/aws/                política IAM para o modo aws-eip
 lab/                       ambiente completo em Docker (2 nós com VIP real, backends, observabilidade)
@@ -161,6 +162,11 @@ docker compose -f lab/docker-compose.yml stop lb1   # failover: o VIP vai para o
 - Manager: http://localhost:8080 (admin / admin12345)
 - Grafana: http://localhost:3000 (dashboard *HAProxy Manager · HAProxy alta disponibilidade*)
 - Prometheus: http://localhost:9090
+
+## Manager em Docker (opcional)
+
+Alternativa ao `install-manager.sh`: `deploy/docker/` sobe o manager com PostgreSQL e um proxy TLS (Caddy), com a
+porta dos agentes separada da interface. Os nós continuam instalados nos servidores. Guia: [docs/manager-docker.md](docs/manager-docker.md).
 
 ## On-premise (scripts Bash)
 

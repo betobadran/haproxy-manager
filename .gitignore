@@ -8,3 +8,5 @@ data/
 haproxy-manager-ui/node/
 haproxy-manager-ui/dist/
 .env
+deploy/docker/manager.env
+deploy/docker/certs/
