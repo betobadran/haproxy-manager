@@ -610,7 +610,7 @@ export const EN: Record<string, string> = {
   "crie estes registros no DNS": "create these DNS records",
   "exportando do ACM — acompanhe o status": "exporting from ACM — follow the status",
   "manual (mostrar os registros)": "manual (show the records)",
-  "ou ARN de um certificado exportável existente": "or ARN of an existing exportable certificate",
+  "ou ARN de um certificado exportável existente (com a tag hapm-cluster)": "or ARN of an existing exportable certificate (tagged hapm-cluster)",
   "pedido": "requested",
   "pedido enviado ao ACM — acompanhe a validação": "request sent to ACM — follow the validation",
   "registros de validação (Route 53)": "validation records (Route 53)",

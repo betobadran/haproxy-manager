@@ -58,6 +58,7 @@ public class FakeAws implements AutoCloseable {
     public boolean exportable;
     public Instant notAfter;
     public KeyPair key;
+    public Map<String, String> tags = new LinkedHashMap<>();
     public String pem;
     public String validationName;
     public String validationValue;
@@ -165,11 +166,22 @@ public class FakeAws implements AutoCloseable {
         c.domains.add(in.path("DomainName").asString());
         for (var s : in.path("SubjectAlternativeNames")) if (!c.domains.contains(s.asString())) c.domains.add(s.asString());
         c.exportable = "ENABLED".equals(in.path("Options").path("Export").asString(""));
+        for (var t : in.path("Tags")) c.tags.put(t.path("Key").asString(), t.path("Value").asString(""));
         var base = c.domains.get(0).replaceFirst("^\\*\\.", "");
         c.validationName = "_" + Integer.toHexString(c.arn.hashCode()) + "." + base + ".";
         c.validationValue = "_" + Integer.toHexString(base.hashCode()) + ".acm-validations.aws.";
         certs.put(c.arn, c);
         send(ex, 200, "application/x-amz-json-1.1", JSON.writeValueAsString(Map.of("CertificateArn", c.arn)));
+      }
+      case "ListTagsForCertificate" -> {
+        var c = certs.get(in.path("CertificateArn").asString());
+        if (c == null) {
+          acmError(ex, 400, "ResourceNotFoundException", "not found");
+          return;
+        }
+        var list = new ArrayList<Map<String, Object>>();
+        c.tags.forEach((k, v) -> list.add(Map.of("Key", k, "Value", v)));
+        send(ex, 200, "application/x-amz-json-1.1", JSON.writeValueAsString(Map.of("Tags", list)));
       }
       case "DescribeCertificate" -> {
         var c = certs.get(in.path("CertificateArn").asString());

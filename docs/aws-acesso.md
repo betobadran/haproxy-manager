@@ -29,8 +29,10 @@ Route 53 é permitida — sem alterar nada.
 
 ![Teste de acesso](telas/aws-acesso-teste-dark.png)
 
-**Política mínima** da role/identidade do manager: `deploy/aws/hapm-manager-iam-policy.json` (ACM: pedir, descrever,
-exportar e listar; Route 53: listar zonas e criar/atualizar **só registros CNAME `_*` de validação**).
+**Política mínima** da role/identidade do manager: `deploy/aws/hapm-manager-iam-policy.json`. No ACM, o manager só
+pede certificados com a tag `hapm-cluster` e só descreve e exporta certificados que tenham essa tag, então não consegue
+extrair a chave de outros certificados da conta. No Route 53, lista zonas e cria/atualiza **só registros CNAME `_*` de
+validação**.
 
 ### Role no failover dos nós (topologia aws-eip)
 
@@ -58,7 +60,9 @@ no HAProxy. Aba **Certificados › AWS Certificate Manager (ACM)**:
 
 ![Certificados do ACM](telas/certificados-acm-dark.png)
 
-Também dá para usar um **certificado exportável já existente** informando o ARN. Certificados pedidos antes de
+Também dá para usar um **certificado exportável já existente** informando o ARN. Ele precisa ter a tag
+`hapm-cluster=<nome do cluster>` no ACM: sem ela, o manager recusa a exportação (e a política IAM mínima também nega).
+Certificados pedidos antes de
 17/06/2025 ou sem `Export=ENABLED` **não** são exportáveis: o HAProxy Manager mostra o erro e alerta (`acm-failed`).
 
 > **Custo:** a AWS cobra cada emissão e cada renovação de certificado exportável (no lançamento: cerca de US$ 15 por

@@ -10,5 +10,5 @@ ENV HAPM_DATA_DIR=/data \
 VOLUME /data
 EXPOSE 8080
 USER hapm
-HEALTHCHECK --interval=15s --timeout=3s CMD ["/bin/sh", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+HEALTHCHECK --interval=15s --timeout=3s CMD ["/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
 ENTRYPOINT ["java", "-jar", "/opt/hapm/hapm-manager.jar"]

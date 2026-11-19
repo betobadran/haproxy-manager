@@ -375,7 +375,7 @@ function Certificates({ cluster }: { cluster: any }) {
             options: [['route53', 'automática no Route 53'], ['manual', 'manual (mostrar os registros)']] }],
           { key: 'domains', label: 'Domínios (aceita *.dominio)', type: 'tokens', placeholder: 'loja.example.com *.example.com' },
           [{ key: 'hostedZoneId', label: 'Zona do Route 53 (opcional; vazio = descobrir pelo nome)', placeholder: 'Z0123456789ABC' },
-            { key: 'arn', label: 'ou ARN de um certificado exportável existente', placeholder: 'arn:aws:acm:sa-east-1:...:certificate/...' }]]}
+            { key: 'arn', label: 'ou ARN de um certificado exportável existente (com a tag hapm-cluster)', placeholder: 'arn:aws:acm:sa-east-1:...:certificate/...' }]]}
           value={acm} onChange={setAcm} ctx={{}} />
         <button className="primary" onClick={doAcm}>{t('Pedir / importar do ACM')}</button>
       </details>

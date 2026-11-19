@@ -94,5 +94,18 @@ class OidcLoginTest {
     IDP.enqueueCallback(new DefaultOAuth2TokenCallback("default", "u-456", "JWT", List.of("hapm"),
         Map.of("preferred_username", "jose", "realm_access", Map.of("roles", List.of("outro"))), 3600));
     assertThat(browserLogin()).startsWith("#/login?error=").contains("sem papel");
+
+    // homônimo de conta local (admin) no IdP não assume a conta local
+    IDP.enqueueCallback(new DefaultOAuth2TokenCallback("default", "u-789", "JWT", List.of("hapm"),
+        Map.of("preferred_username", "admin", "realm_access", Map.of("roles", List.of("hapm-approvers"))), 3600));
+    assertThat(browserLogin()).startsWith("#/login?error=").contains("conta local");
+
+    // sem preferred_username, e-mail não verificado não vira nome de usuário (cai no sub)
+    IDP.enqueueCallback(new DefaultOAuth2TokenCallback("default", "u-999", "JWT", List.of("hapm"),
+        Map.of("email", "admin", "email_verified", false, "realm_access", Map.of("roles", List.of("hapm-approvers"))), 3600));
+    var frag2 = browserLogin();
+    assertThat(frag2).startsWith("#/login/callback?code=");
+    var s2 = api.call("POST", "/api/auth/exchange", Map.of("code", frag2.substring(frag2.indexOf("code=") + 5)));
+    assertThat(s2.body().get("username").asString()).isEqualTo("u-999");
   }
 }

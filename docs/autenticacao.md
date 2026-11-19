@@ -73,6 +73,10 @@ No IdP, cadastre a *redirect URI* `https://<manager>/login/oauth2/code/hapm`.
   `groups`. O Entra envia **IDs (GUID)** dos grupos; use os GUIDs no mapeamento, ou configure o envio de nomes
   (`sAMAccountName`) para grupos sincronizados do AD.
 
+O nome de usuário vem da claim configurada (`preferred_username` por padrão). Sem ela, o manager usa o `email` só
+se o IdP marcar `email_verified=true`; senão, usa o `sub`. Um login por SSO ou LDAP **nunca assume uma conta local**
+de mesmo nome (por exemplo, `admin`): o login é recusado e a conta local continua só com a senha local.
+
 Com vários managers atrás de um balanceador, o fluxo OAuth2 usa a sessão HTTP por alguns segundos.
 Use afinidade (sticky) só para `/oauth2/*` e `/login/oauth2/*`, ou uma única instância para o login.
 

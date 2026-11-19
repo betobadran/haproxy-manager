@@ -2,16 +2,28 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AcmCertificadosExportaveis",
+      "Sid": "AcmListar",
       "Effect": "Allow",
-      "Action": [
-        "acm:RequestCertificate",
-        "acm:DescribeCertificate",
-        "acm:ExportCertificate",
-        "acm:ListCertificates",
-        "acm:AddTagsToCertificate"
-      ],
+      "Action": ["acm:ListCertificates", "acm:ListTagsForCertificate"],
       "Resource": "*"
+    },
+    {
+      "Sid": "AcmPedirSomenteComTagHapm",
+      "Effect": "Allow",
+      "Action": ["acm:RequestCertificate", "acm:AddTagsToCertificate"],
+      "Resource": "*",
+      "Condition": {
+        "Null": { "aws:RequestTag/hapm-cluster": "false" }
+      }
+    },
+    {
+      "Sid": "AcmDescreverExportarSomenteCertificadosHapm",
+      "Effect": "Allow",
+      "Action": ["acm:DescribeCertificate", "acm:ExportCertificate"],
+      "Resource": "arn:aws:acm:*:*:certificate/*",
+      "Condition": {
+        "Null": { "aws:ResourceTag/hapm-cluster": "false" }
+      }
     },
     {
       "Sid": "Route53ValidacaoDns",

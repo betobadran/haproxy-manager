@@ -49,6 +49,7 @@ import software.amazon.awssdk.services.route53.model.RRType;
  */
 @Service
 public class AcmService {
+  static final String CLUSTER_TAG = "hapm-cluster";
   private static final Logger log = LoggerFactory.getLogger(AcmService.class);
   private static final SecureRandom RNG = new SecureRandom();
 
@@ -125,7 +126,7 @@ public class AcmService {
         var sans = domains.size() > 1 ? domains : List.<String>of();
         arn = acm.requestCertificate(r -> r.domainName(domains.get(0)).subjectAlternativeNames(sans.isEmpty() ? null : sans)
             .validationMethod(ValidationMethod.DNS).idempotencyToken(token).options(o -> o.export("ENABLED"))
-            .tags(t -> t.key("hapm-cluster").value(cluster.name()), t -> t.key("hapm-certificate").value(certName))).certificateArn();
+            .tags(t -> t.key(CLUSTER_TAG).value(cluster.name()), t -> t.key("hapm-certificate").value(certName))).certificateArn();
         save(cid, certId, c.withAws(with(a, arn, "requested", null, null, null)));
         store.audit(user, cid, "certificate.acm.requested", c.name(), Map.of("arn", arn, "domains", a.domains()));
         log.info("ACM: certificado {} pedido ({})", c.name(), arn);
@@ -202,6 +203,12 @@ public class AcmService {
     var passphrase = Base64.getUrlEncoder().withoutPadding().encodeToString(pass);
     String certPem, chain, keyPem;
     try (var acm = aws.acm(cluster, user)) {
+      // Só exporta certificados marcados para o HAProxy Manager (a política IAM mínima exige a mesma tag):
+      // um ARN informado na tela não pode servir para extrair a chave de outro certificado da conta.
+      var tags = acm.listTagsForCertificate(x -> x.certificateArn(d.certificateArn())).tags();
+      if (tags == null || tags.stream().noneMatch(t -> CLUSTER_TAG.equals(t.key())))
+        throw new IllegalStateException("o certificado não tem a tag " + CLUSTER_TAG + ": adicione " + CLUSTER_TAG + "=" + cluster.name()
+            + " no ACM para o HAProxy Manager poder exportá-lo");
       var r = acm.exportCertificate(x -> x.certificateArn(d.certificateArn()).passphrase(SdkBytes.fromString(passphrase, StandardCharsets.UTF_8)));
       certPem = r.certificate();
       chain = r.certificateChain();

@@ -60,7 +60,8 @@ public class OidcLoginHandler implements AuthenticationSuccessHandler, Authentic
     var claims = user.getAttributes();
     var usernameClaim = cfg.usernameClaim() == null || cfg.usernameClaim().isBlank() ? "preferred_username" : cfg.usernameClaim();
     var username = str(claims.get(usernameClaim));
-    if (username == null) username = str(claims.get("email"));
+    // e-mail só serve de identificador se o IdP garante que foi verificado
+    if (username == null && Boolean.parseBoolean(str(claims.get("email_verified")))) username = str(claims.get("email"));
     if (username == null) username = user.getName();
     var display = str(claims.getOrDefault("name", username));
     var groups = claimList(claims, cfg.groupsClaim() == null || cfg.groupsClaim().isBlank() ? "groups" : cfg.groupsClaim());

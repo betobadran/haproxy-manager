@@ -66,6 +66,10 @@ public class AuthService {
 
   /** Usuário autenticado externamente (LDAP/OIDC): papéis vêm dos grupos. */
   public Outcome external(String username, String displayName, String source, java.util.Collection<String> groups) {
+    if (username == null || username.isBlank()) return new Denied("o provedor de identidade não informou um nome de usuário");
+    // um login externo nunca assume uma conta local homônima (ex.: preferred_username "admin" no IdP)
+    if (store.getUser(username).filter(u -> "local".equals(u.source())).isPresent())
+      return new Denied("o nome de usuário " + username + " pertence a uma conta local; use o login local ou peça ao administrador para renomear a conta");
     var roles = mapper.map(groups);
     if (roles.isEmpty()) return new Denied("autenticado, mas sem papel no HAProxy Manager (peça inclusão em um dos grupos mapeados)");
     var names = new java.util.TreeSet<String>();

@@ -132,6 +132,12 @@ class AcmTest {
     existing.validationValue = "_y.acm-validations.aws.";
     AWS.issue(existing, Instant.now().plus(200, ChronoUnit.DAYS));
     AWS.certs.put(existing.arn, existing);
+    // sem a tag hapm-cluster o HAProxy Manager não exporta (outro certificado qualquer da conta)
+    r = admin.call("POST", "/api/clusters/" + cid + "/certificates", Map.of("name", "semtag", "source", "acm", "aws", Map.of("arn", existing.arn)));
+    var semTag = waitFor(cid, r.body().get("id").asString(), x -> x.aws() != null && "error".equals(x.aws().status()));
+    assertThat(semTag.aws().error()).contains("tag hapm-cluster");
+    assertThat(AWS.calls).noneMatch(k -> k.action().equals("ExportCertificate") && k.params().get("body").contains(existing.arn));
+    existing.tags.put("hapm-cluster", "acm");
     r = admin.call("POST", "/api/clusters/" + cid + "/certificates", Map.of("name", "legado", "source", "acm", "aws", Map.of("arn", existing.arn)));
     var legado = waitFor(cid, r.body().get("id").asString(), x -> x.aws() != null && "issued".equals(x.aws().status()));
     assertThat(legado.meta().domains()).contains("legado.example.com");
@@ -143,6 +149,7 @@ class AcmTest {
     old.validationName = "_x.antigo.example.com.";
     old.validationValue = "_y.acm-validations.aws.";
     AWS.issue(old, Instant.now().plus(200, ChronoUnit.DAYS));
+    old.tags.put("hapm-cluster", "acm");
     AWS.certs.put(old.arn, old);
     r = admin.call("POST", "/api/clusters/" + cid + "/certificates", Map.of("name", "antigo", "source", "acm", "aws", Map.of("arn", old.arn)));
     var antigo = waitFor(cid, r.body().get("id").asString(), x -> x.aws() != null && "error".equals(x.aws().status()));
