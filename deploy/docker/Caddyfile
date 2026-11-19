@@ -1,6 +1,11 @@
 # Proxy TLS do manager. As variáveis vêm do .env (ver .env.example).
 # MANAGER_TLS: vazio = certificado automático (Let's Encrypt; o domínio precisa ser público e a porta 80 acessível),
 #              "tls internal" = CA própria do Caddy, ou "tls /certs/fullchain.pem /certs/privkey.pem" = seu certificado.
+# HTTP -> HTTPS sempre para a interface (sem isto o Caddy poderia redirecionar para a porta dos agentes)
+http://{$MANAGER_DOMAIN} {
+	redir https://{host}{uri} permanent
+}
+
 # Interface e API (rede de administração)
 {$MANAGER_DOMAIN} {
 	{$MANAGER_TLS}

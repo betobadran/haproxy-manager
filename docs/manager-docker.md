@@ -45,6 +45,11 @@ Acesse `https://<MANAGER_DOMAIN>/`.
 - **Porta 8088**: os nós repassam `/.well-known/acme-challenge/` para o manager (Let's Encrypt dos listeners). Em cada
   cluster, configure **Manager visto pelo HAProxy** = `<host do manager>:8088`.
 
+**Atenção:** o Docker publica portas por cima do firewall do host (ufw/firewalld não as bloqueiam). Separe as redes
+amarrando cada porta ao IP certo no `.env`: `UI_BIND` com o IP da rede de administração, `AGENTS_BIND` e `ACME_BIND`
+com o IP da rede dos nós. Com uma única interface, filtre na chain `DOCKER-USER` do iptables ou num firewall/security
+group externo.
+
 Instale os nós apontando para a porta dos agentes:
 
 ```bash
