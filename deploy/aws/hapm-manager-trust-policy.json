@@ -1,0 +1,15 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManagerDoHapmEmOutraConta",
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::111111111111:role/hapm-manager-ec2" },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": { "sts:ExternalId": "troque-por-um-valor-aleatorio" },
+        "StringLike": { "sts:RoleSessionName": "hapm-*" }
+      }
+    }
+  ]
+}

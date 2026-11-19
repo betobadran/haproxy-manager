@@ -1,0 +1,17 @@
+import { createContext, useContext } from 'react';
+
+import type { ServerPrefs } from './prefs';
+
+export type Me = { username: string; displayName: string; source: string; roles: string[]; effectiveRoles: string[]; prefs?: ServerPrefs | null };
+
+export const MeCtx = createContext<Me | null>(null);
+
+/** Permissões derivadas dos papéis (a API valida de novo; aqui é só para esconder o que não se pode fazer). */
+export function usePerm() {
+  const me = useContext(MeCtx);
+  const has = (r: string) => !!me?.effectiveRoles.includes(r);
+  return { me, canEdit: has('OPERATOR'), canApprove: has('APPROVER'), isAdmin: has('ADMIN') };
+}
+
+const ROLE_LABEL: Record<string, string> = { VIEWER: 'leitura', OPERATOR: 'operador', APPROVER: 'aprovador', ADMIN: 'admin' };
+export const roleLabel = (t: (s: string) => string, r: string) => t(ROLE_LABEL[r] ?? r);

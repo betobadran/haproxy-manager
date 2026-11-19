@@ -1,0 +1,8 @@
+HAProxy Manager
+Copyright 2026 The HAProxy Manager authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+HAProxy, Keepalived, Prometheus, Grafana and OpenTelemetry are trademarks or
+projects of their respective owners; HAProxy Manager is an independent project and is not
+affiliated with or endorsed by them.

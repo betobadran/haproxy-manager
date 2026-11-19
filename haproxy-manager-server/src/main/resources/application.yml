@@ -1,0 +1,87 @@
+server:
+  port: ${HAPM_PORT:8080}
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+
+spring:
+  application:
+    name: hapm-manager
+  # Banco: SQLite local (padrão, arquivo em HAPM_DATA_DIR) ou PostgreSQL (instalação completa / vários managers):
+  #   HAPM_DB_URL=jdbc:postgresql://db:5432/hapm  HAPM_DB_USER=hapm  HAPM_DB_PASSWORD=...
+  # SQLite: WAL (leitores não bloqueiam escritor), transações IMMEDIATE e busy_timeout evitam SQLITE_BUSY.
+  datasource:
+    url: ${HAPM_DB_URL:jdbc:sqlite:${HAPM_DATA_DIR:./data}/hapm.db?foreign_keys=true&journal_mode=WAL&synchronous=NORMAL&busy_timeout=10000&transaction_mode=IMMEDIATE}
+    username: ${HAPM_DB_USER:}
+    password: ${HAPM_DB_PASSWORD:}
+  flyway:
+    # migrações por banco: db/migration/sqlite ou db/migration/postgresql
+    locations: classpath:db/migration/{vendor}
+  servlet:
+    multipart:
+      max-file-size: 2MB
+
+hapm:
+  admin-user: ${HAPM_ADMIN_USER:admin}
+  admin-password: ${HAPM_ADMIN_PASSWORD:}
+  secret: ${HAPM_SECRET:}
+  acme-directory: ${HAPM_ACME_DIRECTORY:acme://letsencrypt.org}
+  haproxy-bin: ${HAPM_HAPROXY_BIN:haproxy}
+  node-offline-after-sec: ${HAPM_NODE_OFFLINE_AFTER:15}
+  # porta exclusiva dos agentes (data plane): só /agent/**, desafio ACME e health; 0 = mesma porta da interface
+  agent-port: ${HAPM_AGENT_PORT:0}
+  deployment-timeout-sec: 600
+  cert-renew-before-days: 30
+  # busca de logs de acesso na tela (Loki 3.x; os logs chegam via OTel Collector). Vazio = tela de logs desabilitada.
+  loki:
+    url: ${HAPM_LOKI_URL:}
+    tenant: ${HAPM_LOKI_TENANT:}
+    token: ${HAPM_LOKI_TOKEN:}
+  auth:
+    session-hours: 12
+    # usuários locais (inclui o admin inicial). Em produção, mantenha só um admin local "break-glass".
+    local:
+      enabled: ${HAPM_AUTH_LOCAL_ENABLED:true}
+    # papéis: VIEWER (leitura) < OPERATOR (edita e solicita publicação) | APPROVER (aprova) < ADMIN (tudo)
+    # mapeie grupos do LDAP/IdP para papéis (nomes de grupo sem diferenciar maiúsculas; DN completo ou só o CN)
+    role-mapping:
+      ADMIN: ${HAPM_ROLES_ADMIN:hapm-admins}
+      APPROVER: ${HAPM_ROLES_APPROVER:hapm-approvers}
+      OPERATOR: ${HAPM_ROLES_OPERATOR:hapm-operators}
+      VIEWER: ${HAPM_ROLES_VIEWER:hapm-viewers}
+    default-roles: ${HAPM_DEFAULT_ROLES:}
+    ldap:
+      enabled: ${HAPM_LDAP_ENABLED:false}
+      url: ${HAPM_LDAP_URL:ldaps://ldap.exemplo.com:636}
+      base-dn: ${HAPM_LDAP_BASE_DN:dc=exemplo,dc=com}
+      user-dn-pattern: ${HAPM_LDAP_USER_DN_PATTERN:}
+      user-search-base: ${HAPM_LDAP_USER_SEARCH_BASE:ou=people}
+      user-search-filter: ${HAPM_LDAP_USER_SEARCH_FILTER:(uid={0})}
+      manager-dn: ${HAPM_LDAP_MANAGER_DN:}
+      manager-password: ${HAPM_LDAP_MANAGER_PASSWORD:}
+      group-search-base: ${HAPM_LDAP_GROUP_SEARCH_BASE:ou=groups}
+      group-search-filter: ${HAPM_LDAP_GROUP_SEARCH_FILTER:(member={0})}
+      group-role-attribute: ${HAPM_LDAP_GROUP_ATTRIBUTE:cn}
+      display-name-attribute: ${HAPM_LDAP_DISPLAY_NAME_ATTRIBUTE:cn}
+      # Active Directory: preencha o domínio (ex.: corp.exemplo.com) e a URL (ldaps://dc.corp.exemplo.com)
+      active-directory-domain: ${HAPM_LDAP_AD_DOMAIN:}
+    oidc:
+      enabled: ${HAPM_OIDC_ENABLED:false}
+      registration-id: hapm
+      label: ${HAPM_OIDC_LABEL:Entrar com SSO}
+      username-claim: ${HAPM_OIDC_USERNAME_CLAIM:preferred_username}
+      groups-claim: ${HAPM_OIDC_GROUPS_CLAIM:groups}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO

@@ -1,0 +1,10 @@
+node_modules/
+target/
+data/
+*.db
+*.mv.db
+.terraform/
+*.tfstate*
+haproxy-manager-ui/node/
+haproxy-manager-ui/dist/
+.env
