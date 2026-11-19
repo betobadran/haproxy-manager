@@ -34,6 +34,13 @@ pede certificados com a tag `hapm-cluster` e só descreve e exporta certificados
 extrair a chave de outros certificados da conta. No Route 53, lista zonas e cria/atualiza **só registros CNAME `_*` de
 validação**.
 
+> **Limite da política:** para marcar o certificado na criação, a AWS exige `acm:AddTagsToCertificate`. A política só
+> permite essa ação com as chaves `hapm-cluster`/`hapm-certificate` e em certificados que ainda não têm `hapm-cluster`
+> (não dá para mover um certificado de um cluster para outro), mas a AWS não distingue um certificado recém-pedido de
+> um certificado antigo sem tag. Quem controlar a identidade do manager ainda conseguiria marcar e exportar um
+> certificado exportável sem tag da mesma conta. Para isolamento forte, use uma **conta AWS dedicada** aos
+> certificados do HAProxy Manager (ou uma role por cluster com `StringEquals` em `aws:ResourceTag/hapm-cluster`).
+
 ### Role no failover dos nós (topologia aws-eip)
 
 Os nós movem IPs com o **instance profile** da EC2. Se a rede estiver em outra conta (ou você quiser separar
